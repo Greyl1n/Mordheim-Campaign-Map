@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mordheim Campaign Map</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f0f;--bg2:#1a1a1a;--panel:rgba(22,22,22,0.96);
+  --text:#e0e0e0;--text2:#a0a0a0;
+  --accent:#d4a847;--accent2:#e6b85a;
+  --border:#333;--hover:rgba(212,168,71,0.12);
+  --img-w:4000;--img-h:2829;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;overflow:hidden}
+a{color:var(--accent)}a:hover{color:var(--accent2)}
+
+#map{width:100vw;height:100vh;overflow:hidden;position:relative;cursor:grab}
+#map:active{cursor:grabbing}
+#map-content{transform-origin:0 0;will-change:transform}
+#map-img{display:block;max-width:none;user-select:none;pointer-events:none}
+
+/* District zone (circular hit area) */
+.district-zone{position:absolute;cursor:pointer;z-index:5;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;transition:background .15s;pointer-events:auto}
+.district-zone:hover{background:rgba(212,168,71,0.12);z-index:10}
+
+/* Token markers on map */
+.token-marker{position:absolute;z-index:15;cursor:grab;transition:transform .15s,opacity .15s;pointer-events:auto}
+.token-marker:hover{transform:scale(1.15);z-index:20}
+.token-marker.dragging{opacity:.7;z-index:30}
+.token-marker img{width:100%;height:100%;display:block;border:1.5px solid var(--accent);border-radius:3px}
+
+/* District tooltip — viewport-fixed overlay, unaffected by zoom */
+#dist-tooltip{position:fixed;z-index:500;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 12px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#dist-tooltip.show{opacity:1}
+#dist-tooltip h3{font-size:13px;font-weight:600;margin-bottom:3px;color:var(--accent)}
+#dist-tooltip p{font-size:11px;line-height:1.4;color:var(--text2)}
+#dist-tooltip .status{margin-top:4px;font-size:10px;color:var(--accent)}
+#dist-tooltip .icons{display:flex;gap:5px;margin-top:4px}
+
+.dist-zone-wrap{position:absolute;z-index:5}
+
+/* Sidebar */
+#sidebar{position:fixed;top:0;left:0;width:360px;height:100vh;background:var(--panel);z-index:100;transform:translateX(-100%);transition:transform .25s;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+#sidebar.open{transform:translateX(0)}
+#sidebar .header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+#sidebar .header h1{font-size:16px;color:var(--accent)}
+#sidebar .header button{background:none;border:none;color:var(--text);cursor:pointer;padding:4px;font-size:20px}
+#sidebar .body{flex:1;overflow-y:auto;padding:16px}
+
+#tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:16px}
+#tabs button{flex:1;background:none;border:none;color:var(--text2);cursor:pointer;padding:8px;font-size:12px;border-bottom:2px solid transparent;transition:all .15s}
+#tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Warband card */
+.wb-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.wb-card .token-preview{width:32px;height:32px;flex-shrink:0;border:1.5px solid var(--accent);border-radius:2px;overflow:hidden}
+.wb-card .info{flex:1;min-width:0}
+.wb-card .info h3{font-size:13px;color:var(--accent);margin-bottom:2px}
+.wb-card .info .stats{font-size:10px;color:var(--text2);display:flex;gap:8px}
+.wb-card .actions{display:flex;gap:4px}
+.wb-card .actions button{background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:2px;border-radius:3px;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.wb-card .actions button:hover{background:var(--hover);color:var(--accent)}
+
+/* Token palette */
+#token-palette{display:grid;grid-template-columns:repeat(auto-fill,44px);gap:6px;margin-top:8px}
+.token-opt{width:44px;height:44px;border-radius:3px;cursor:pointer;border:2px solid var(--border);transition:all .15s;background:var(--bg2);overflow:hidden}
+.token-opt:hover,.token-opt.selected{border-color:var(--accent);transform:scale(1.1);box-shadow:0 0 8px rgba(212,168,71,.4)}
+
+/* Buttons */
+.map-btn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;backdrop-filter:blur(8px);transition:background .15s}
+.map-btn:hover{background:var(--accent);color:#000}
+
+#map-btns{position:fixed;top:16px;left:16px;display:flex;gap:6px;z-index:50}
+#zoom{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;z-index:50}
+#zoom button{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer;border-bottom:none;transition:background .15s}
+#zoom button:last-child{border-bottom:1px solid var(--border)}
+#zoom button:hover{background:var(--accent);color:#000}
+
+#overlay{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.3);display:none}
+
+/* Warband create dialog */
+#wb-dialog{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;width:340px;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+#wb-dialog.open{display:block}
+#wb-dialog h2{font-size:15px;color:var(--accent);margin-bottom:12px}
+#wb-dialog label{font-size:11px;color:var(--text2);display:block;margin-bottom:4px}
+#wb-dialog input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 10px;color:var(--text);font-size:13px;margin-bottom:12px;outline:none}
+#wb-dialog input:focus{border-color:var(--accent)}
+#wb-dialog .flex{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+#wb-dialog .flex button{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:6px 16px;color:var(--text);cursor:pointer;font-size:12px}
+#wb-dialog .flex button.primary{background:var(--accent);color:#000;border-color:var(--accent)}
+#wb-dialog .flex button:hover{opacity:.85}
+
+/* Status legend */
+#legend{position:fixed;bottom:24px;left:24px;z-index:50;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 14px;backdrop-filter:blur(8px);font-size:11px;display:flex;flex-direction:column;gap:4px}
+#legend .row{display:flex;align-items:center;gap:6px;color:var(--text2)}
+#legend .dot{width:12px;height:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#legend .dot svg{width:70%;height:70%}
+
+/* No tokens overlay */
+.no-token{position:absolute;z-index:3;top:50%;left:50%;transform:translate(-50%,-50%);font-size:14px;color:rgba(255,255,255,.15);pointer-events:none}
+
+/* Calibration */
+#cal-section .cal-row{display:flex;gap:4px;margin-bottom:6px}
+#cal-section select{flex:1;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:4px;font-size:11px;outline:none}
+#cal-section select:focus{border-color:var(--accent)}
+.cal-btn{font-size:11px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;transition:background .15s;height:28px;white-space:nowrap}
+.cal-btn:hover,.cal-btn.active{background:var(--accent);color:#000}
+.cal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px}
+.cal-grid button{font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer;line-height:1}
+.cal-grid button:hover{background:var(--accent);color:#000}
+#cal-coords{font-family:monospace;font-size:10px;color:var(--text2);margin:4px 0 6px;word-break:break-all;line-height:1.4;background:var(--bg2);padding:6px;border-radius:3px;border:1px solid var(--border)}
+
+/* Calibration overlay on map */
+.cal-highlight .dist-zone-wrap{border:2.5px solid rgba(255,220,60,.85);background:rgba(255,220,60,.13);border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.cal-highlight .dist-zone-wrap .district-zone{background:rgba(255,220,60,.1)}
+.cal-highlight .dist-zone-wrap:hover{background:rgba(255,220,60,.3);border-color:#ffdd44}
+
+/* Floating calibration panel */
+#cal-panel{position:fixed;top:60px;right:16px;z-index:80;background:var(--panel);border:1px solid var(--accent);border-radius:8px;padding:14px;width:300px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:none;backdrop-filter:blur(12px)}
+#cal-panel.show{display:block}
+#cal-panel .cal-title{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+#cal-panel .cal-row{display:flex;gap:4px;margin-bottom:6px}
+#cal-panel select{flex:1;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 6px;font-size:11px;outline:none}
+#cal-panel select:focus{border-color:var(--accent)}
+#cal-panel .cal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px}
+#cal-panel .cal-grid button{font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:4px 2px;cursor:pointer;line-height:1}
+#cal-panel .cal-grid button:hover{background:var(--accent);color:#000}
+#cal-panel .cal-btn{font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;transition:background .15s;height:26px;white-space:nowrap;flex:1;text-align:center}
+#cal-panel .cal-btn:hover,.cal-panel .cal-btn.active{background:var(--accent);color:#000}
+#cal-panel #cal-coords{font-family:monospace;font-size:10px;color:var(--text2);margin-top:4px;word-break:break-all;line-height:1.4;background:var(--bg2);padding:5px 6px;border-radius:3px;border:1px solid var(--border)}
+#cal-panel .cal-close{position:absolute;top:4px;right:8px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:2px}
+#cal-panel .cal-close:hover{color:var(--accent)}
+
+/* District context menu */
+#dist-menu{position:fixed;z-index:600;background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:none;min-width:180px}
+#dist-menu.show{display:block}
+#dist-menu .dm-title{font-size:11px;font-weight:600;color:var(--accent);padding:4px 8px 6px;border-bottom:1px solid var(--border);margin-bottom:4px}
+#dist-menu .dm-opt{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--text2);transition:background .1s}
+#dist-menu .dm-opt:hover{background:var(--hover);color:var(--text)}
+#dist-menu .dm-opt.active{color:var(--accent)}
+#dist-menu .dm-opt img{width:24px;height:24px;border:1px solid var(--accent);border-radius:2px}
+#dist-menu .dm-opt .dm-label{flex:1}
+#dist-menu .dm-opt .dm-status{font-size:9px;color:var(--text2)}
+#dist-menu .dm-divider{border-top:1px solid var(--border);margin:4px 0}
+#dist-menu .dm-toggle{display:flex;gap:4px;padding:4px 8px}
+#dist-menu .dm-toggle button{flex:1;font-size:10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:3px 6px;cursor:pointer;color:var(--text2);transition:all .1s}
+#dist-menu .dm-toggle button.active{background:var(--accent);color:#000;border-color:var(--accent)}
+#dist-menu .dm-toggle button:hover{background:var(--accent);color:#000}
+#dist-menu .dm-row{display:flex;align-items:center;gap:6px;padding:4px 8px}
+#dist-menu .dm-row img{width:22px;height:22px;border:1px solid var(--accent);border-radius:2px}
+#dist-menu .dm-row .dm-label{flex:1;font-size:11px;color:var(--text2)}
+#dist-menu .dm-btns{display:flex;gap:2px}
+#dist-menu .dm-btns button{width:22px;height:22px;font-size:11px;line-height:1;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--text2);padding:0;transition:all .1s}
+#dist-menu .dm-btns button:hover{background:var(--hover);border-color:var(--accent)}
+#dist-menu .dm-btns button.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.rules-content h2{font-size:14px;font-weight:600;color:var(--accent);margin:16px 0 8px;letter-spacing:.5px}
+.rules-content h3{font-size:12px;font-weight:600;color:var(--text);margin:12px 0 6px}
+.rules-content p{font-size:11px;line-height:1.6;color:var(--text2);margin-bottom:8px}
+.rules-content ul{list-style:none;padding:0;margin:0 0 8px}
+.rules-content li{padding:4px 0 4px 16px;font-size:11px;line-height:1.5;color:var(--text2);position:relative}
+.rules-content li::before{content:"•";position:absolute;left:2px;color:var(--accent)}
+.rules-content .rule-icon{display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:4px}
+.rules-content .highlight{color:var(--accent);font-weight:500}
+.rules-content .note{background:var(--bg2);border-left:2px solid var(--accent);padding:6px 10px;font-size:11px;color:var(--text2);margin:8px 0;border-radius:0 4px 4px 0}
+.rules-content .symbol-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.rules-content .symbol-card{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px;font-size:11px;color:var(--text2)}
+.rules-content .symbol-card strong{color:var(--text);display:block;margin-bottom:2px}
+/* Campaign */
+#camp-list{max-height:200px;overflow-y:auto;margin-top:8px}
+.camp-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:4px;font-size:11px}
+.camp-row.active{background:var(--bg2)}
+.camp-row-name{flex:1;color:var(--text)}
+.camp-switch,.camp-rename,.camp-delete{background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10px;padding:2px 5px;color:var(--text2);transition:all .1s}
+.camp-switch:hover,.camp-rename:hover,.camp-delete:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div id="map">
+  <div id="map-content">
+    <div id="map-stage" style="position:relative;width:4000px;height:2829px">
+      <img id="map-img" src="src/modheim-map-EN.jpg" alt="Mordheim Map" width="4000" height="2829"
+           onerror="this.style.background='#2a2a2a';this.style.border='1px dashed #555';this.alt='Image not found'">
+    </div>
+  </div>
+</div>
+
+<div id="map-btns">
+  <button class="map-btn" onclick="toggleSidebar()" title="Menu">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+</div>
+
+<div id="zoom">
+  <button onclick="zoomIn()">+</button>
+  <button onclick="zoomOut()">−</button>
+  <button onclick="resetView()">⟲</button>
+  <button onclick="centerView()">◎</button>
+</div>
+
+<div id="legend">
+  <div class="row"><span class="dot" style="background:rgba(212,168,71,.3);border:1px solid var(--accent)"></span> Explored</div>
+  <div class="row"><span class="dot" style="background:rgba(212,168,71,.15);border:1px dashed var(--accent)">⚜</span> Foothold</div>
+</div>
+
+<div id="dist-tooltip"></div>
+
+<div id="cal-panel">
+  <button class="cal-close" onclick="toggleCal()">✕</button>
+  <div class="cal-title">Calibration</div>
+  <div class="cal-row">
+    <select id="cal-select" onchange="updateCalInfo()"></select>
+    <button class="cal-btn" onclick="togglePickMode()" id="pickBtn">Pick</button>
+  </div>
+  <div class="cal-grid">
+    <button onclick="nudge(-5,0)">←5%</button>
+    <button onclick="nudge(5,0)">→5%</button>
+    <button onclick="nudge(0,-5)">↑5%</button>
+    <button onclick="nudge(0,5)">↓5%</button>
+    <button onclick="nudge(-1,0)">←1%</button>
+    <button onclick="nudge(1,0)">→1%</button>
+    <button onclick="nudge(0,-1)">↑1%</button>
+    <button onclick="nudge(0,1)">↓1%</button>
+    <button onclick="nudge(-0.5,0)">←0.5</button>
+    <button onclick="nudge(0.5,0)">→0.5</button>
+    <button onclick="nudge(0,-0.5)">↑0.5</button>
+    <button onclick="nudge(0,0.5)">↓0.5</button>
+  </div>
+  <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap">
+    <button style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:default;text-align:center" disabled>Size</button>
+    <button onclick="resize(-5,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W−5</button>
+    <button onclick="resize(5,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W+5</button>
+    <button onclick="resize(0,-5)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H−5</button>
+    <button onclick="resize(0,5)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H+5</button>
+    <button onclick="resize(-1,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W−1</button>
+    <button onclick="resize(1,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W+1</button>
+    <button onclick="resize(0,-1)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H−1</button>
+    <button onclick="resize(0,1)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H+1</button>
+    <button onclick="resize(-0.5,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W−0.5</button>
+    <button onclick="resize(0.5,0)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">W+0.5</button>
+    <button onclick="resize(0,-0.5)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H−0.5</button>
+    <button onclick="resize(0,0.5)" style="flex:1;min-width:44px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px;cursor:pointer">H+0.5</button>
+  </div>
+  <div id="cal-coords"></div>
+  <div class="cal-row">
+    <button class="cal-btn" onclick="showAllZones()" id="showZonesBtn">Show zones</button>
+    <button class="cal-btn" onclick="saveToFile()">Save</button>
+    <button class="cal-btn" onclick="loadFromFile()">Load</button>
+  </div>
+  <div class="cal-row">
+    <button class="cal-btn" onclick="exportDists()">Export coords</button>
+    <button class="cal-btn" onclick="importDists()">Import coords</button>
+    <button class="cal-btn" onclick="clearData()">Reset</button>
+  </div>
+</div>
+
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<div id="sidebar">
+  <div class="header">
+    <h1>Mordheim Campaign</h1>
+    <button onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="body">
+    <div id="tabs">
+      <button class="active" onclick="switchTab('warbands',this)">Warbands</button>
+      <button onclick="switchTab('map',this)">Districts</button>
+      <button onclick="switchTab('rules',this)">Rules</button>
+      <button onclick="switchTab('settings',this)">Settings</button>
+    </div>
+
+    <div id="tab-warbands" class="tab-content"></div>
+    <div id="tab-map" class="tab-content" style="display:none"></div>
+    <div id="tab-rules" class="tab-content" style="display:none"></div>
+    <div id="tab-settings" class="tab-content" style="display:none">
+      <div class="section" style="margin-bottom:16px">
+        <h2 style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Campaign</h2>
+        <p style="font-size:11px;color:var(--text2);line-height:1.4;margin-bottom:4px">Active: <strong id="camp-name-display" style="color:var(--accent)">—</strong></p>
+        <div style="display:flex;gap:4px;margin-bottom:6px">
+          <button class="map-btn" onclick="createCampaign(prompt('Campaign name:'))" style="flex:1;justify-content:center;font-size:11px">+ New</button>
+          <button class="map-btn" onclick="renameCampaign(activeCampaignId,prompt('Rename to:',getActiveCampaign()?.name))" style="flex:1;justify-content:center;font-size:11px">Rename</button>
+        </div>
+        <div id="camp-list"></div>
+      </div>
+      <div class="section" style="margin-bottom:16px">
+        <h2 style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Campaign Data</h2>
+        <div style="display:flex;gap:6px">
+          <button class="map-btn" onclick="saveToFile()" style="flex:1;justify-content:center;font-size:12px">Save to file</button>
+          <button class="map-btn" onclick="loadFromFile()" style="flex:1;justify-content:center;font-size:12px">Load from file</button>
+        </div>
+        <p style="font-size:10px;color:var(--text2);margin-top:6px">Exports all campaigns to a JSON file.</p>
+      </div>
+      <div id="cal-section" class="section" style="margin-bottom:16px">
+        <h2 style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Calibrate Districts</h2>
+        <p style="font-size:11px;color:var(--text2);line-height:1.4;margin-bottom:8px">Adjust district hit zones to match your map image.</p>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="map-btn" onclick="toggleCal();openSidebarTab('settings')" style="flex:1;justify-content:center;font-size:11px">Open Calibration Panel</button>
+          <button class="map-btn" onclick="saveDefaultDistricts()" style="flex:1;justify-content:center;font-size:11px">Save as Default</button>
+          <button class="map-btn" onclick="restoreDefaultDistricts()" style="flex:1;justify-content:center;font-size:11px">Load Defaults</button>
+        </div>
+      </div>
+      <div class="section">
+        <h2 style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">About</h2>
+        <p style="font-size:11px;color:var(--text2);line-height:1.5">Original Mordheim Campaign Map created by Philip Spence (beyondthetabletop.com), with help from Roland Wenskus, Daniel Särnblom, Giuseppe Chiafele, Maxine Howells, Benoît Dumeaux, Hernan Garcia, Dennis Biegel, Alexander Bai, Kateryna Ruban, Olena Panova and Tuomas Pirinen. Based on the campaign by Chrismish 2010. Map Illustrated by Nuala Kennedy. Mordheim © Games Workshop Limited, All Rights Reserved.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="wb-dialog">
+  <h2>Create Warband</h2>
+  <label>Warband Name</label>
+  <input id="wb-name" placeholder="e.g. Reikland Reavers" maxlength="30">
+  <label>Choose Token</label>
+  <div id="token-palette"></div>
+  <div class="flex">
+    <button onclick="closeWbDialog()">Cancel</button>
+    <button class="primary" onclick="createWarband()">Create</button>
+  </div>
+</div>
+
+<script>
+// ─── TOKEN SYMBOLS ──────────────────────────────────────────────
+// Image-based tokens from src/tokens/ — 13 pairs (explored + foothold)
+const TOKENS = [
+  {id:"apple",  name:"Apple"},
+  {id:"spider", name:"Spider"},
+  {id:"crow",   name:"Crow"},
+  {id:"bell",   name:"Bell"},
+  {id:"B_skull",name:"Bone Skull"},
+  {id:"fish",   name:"Fish"},
+  {id:"comet",  name:"Comet"},
+  {id:"rat",    name:"Rat"},
+  {id:"skull",  name:"Skull"},
+  {id:"hammer", name:"Hammer"},
+  {id:"pistol", name:"Pistol"},
+  {id:"star",   name:"Star"},
+  {id:"flail",  name:"Flail"}
+];
+
+const TOKEN_PATH = "src/tokens/";
+
+// ─── DISTRICT DATA ──────────────────────────────────────────────
+const DISTRICTS = [
+  {id:"artisan-quarter",name:"Artisan Quarter",l:"21.9%",t:"48.6%",w:"6.5%",h:"9.8%",adv:"1/2 price Cathayan Silk Clothes, Hunting Arrows, Lantern, Net, Rope & Hook, Superior Blackpowder."},
+  {id:"freelancer-market",name:"Freelancer Market",l:"33.2%",t:"45.6%",w:"8%",h:"12%",adv:"1/2 price to hire Freelancer. 1/2 price Horse, Warhorse and Wardog."},
+  {id:"dwarven-district",name:"Dwarven District",l:"15%",t:"44.8%",w:"8%",h:"12%",adv:"1/2 price to hire Dwarf Troll Slayer. 1/2 price Bugman's Ale, Gromril Armour and Gromril Weapons."},
+  {id:"exploration-fields",name:"Exploration Fields",l:"30.2%",t:"58.3%",w:"8%",h:"12%",adv:"Roll one extra dice in the Exploration Procedure."},
+  {id:"mercenary-camp",name:"Mercenary Camp",l:"25.3%",t:"38.4%",w:"7%",h:"10.5%",adv:"Roll 3D6 for experience when recruiting for existing, non-human, Henchmen groups."},
+  {id:"raven-barracks",name:"Raven Barracks",l:"27.35%",t:"21%",w:"8.07%",h:"12.1%",adv:"1/2 price to hire Ogre Bodyguard. You can resell weapons and armour at purchase price."},
+  {id:"merchant-row",name:"Merchant Row",l:"33.45%",t:"31.55%",w:"7.8%",h:"11.7%",adv:"Always find max gold or equipment at an Exploration location."},
+  {id:"noble-square",name:"Noble Square",l:"40.7%",t:"22.4%",w:"6.47%",h:"9.7%",adv:"The warband's leader gains +1 Ld."},
+  {id:"temple-of-morr",name:"Temple of Morr",l:"29.95%",t:"72.55%",w:"5.2%",h:"7.8%",adv:"Hero injury 11-15 Dead becomes Full Recovery on 5+."},
+  {id:"the-cemetery",name:"The Cemetery",l:"25.5%",t:"71.15%",w:"4.93%",h:"7.4%",adv:"Undead: Zombies 10gc, Ghouls 30gc. Others: immune to Fear."},
+  {id:"the-gaol",name:"The Gaol",l:"18.55%",t:"59.6%",w:"7.6%",h:"11.4%",adv:"1/2 price Gaoler. Injury 61 Captured becomes Full Recovery."},
+  {id:"amphitheatre",name:"Amphitheatre",l:"51.3%",t:"55.3%",w:"7.67%",h:"11.5%",adv:"1/2 price Pit Fighter. 1/2 price Net. Injury 65 auto-win."},
+  {id:"city-hall",name:"City Hall",l:"69.55%",t:"43.3%",w:"6.3%",h:"9.45%",adv:"Modify one Exploration dice by +1 or -1."},
+  {id:"clock-tower",name:"Clock Tower",l:"68.2%",t:"69.1%",w:"7.5%",h:"11.25%",adv:"Always find max gold/equipment at an Exploration location."},
+  {id:"fence-alley",name:"Fence Alley",l:"60.5%",t:"32.9%",w:"6.47%",h:"9.7%",adv:"1/2 price Poisons and Drugs."},
+  {id:"halfling-market",name:"Halfling Market",l:"76.83%",t:"26.42%",w:"6.4%",h:"9.6%",adv:"1/2 price Halfling Scout. 1/2 price Halfling Cookbook."},
+  {id:"merchants-quarter",name:"Merchants Quarter",l:"50.5%",t:"41.18%",w:"7.87%",h:"11.8%",adv:"1/2 price Elf Ranger. 1/2 price Elf Bow, Elven Cloak, Ithilmar Armour, Ithilmar Weapon."},
+  {id:"rare-items",name:"Rare Items Bazaar",l:"62.2%",t:"44.4%",w:"7.87%",h:"11.8%",adv:"Add +2 on rare items roll."},
+  {id:"poor-quarter",name:"Poor Quarter",l:"58.1%",t:"71.3%",w:"8.47%",h:"12.7%",adv:"Roll one extra dice in the Exploration Procedure."},
+  {id:"quayside",name:"Quayside",l:"50.9%",t:"28.9%",w:"7.33%",h:"11%",adv:"Roll 3D6 for experience when recruiting existing human Henchmen."},
+  {id:"warlock-tower",name:"Warlock Tower",l:"74.58%",t:"55.35%",w:"6.53%",h:"9.8%",adv:"1/2 price Warlock. 1/2 price Tome of Magic. Choose spells."},
+  {id:"healing-temple",name:"Healing Temple",l:"77%",t:"40.1%",w:"7.67%",h:"11.5%",adv:"Injury 22-35 becomes Full Recovery on 5+."},
+  {id:"the-great-library",name:"The Great Library",l:"67.35%",t:"24.7%",w:"8.87%",h:"13.3%",adv:"1/2 price Halfling Cookbook, Holy Tome, Mordheim Map, Tome of Magic."},
+  {id:"the-pit",name:"The Pit",l:"61.9%",t:"59.3%",w:"8%",h:"12%",adv:"Exploration result may be changed to The Pit. Cult of Possessed: max wyrdstone."},
+  {id:"bridge-toll",name:"Bridge Toll",l:"41%",t:"44.2%",w:"6.5%",h:"9.75%",adv:"Controlling warband gains 2D6 gc when others pass through."},
+  {id:"sisters-of-sigmar",name:"Sisters of Sigmar",l:"42.2%",t:"63.87%",w:"7.8%",h:"11.7%",adv:"Sell wyrdstone for +20% gold."},
+  {id:"river-gate",name:"River Gate",l:"53.22%",t:"16.9%",w:"7.67%",h:"11.5%",adv:"1/2 price Luthor Wolfenbaum. Hero auto-finds him."},
+  {id:"east-gate",name:"East Gate",l:"80.65%",t:"53.5%",w:"5.33%",h:"8%",adv:"1/2 price Luthor Wolfenbaum. Hero auto-finds him."},
+  {id:"south-gate",name:"South Gate",l:"48.3%",t:"74.2%",w:"7.13%",h:"10.7%",adv:"1/2 price Luthor Wolfenbaum. Hero auto-finds him."},
+  {id:"west-gate",name:"West Gate",l:"16.25%",t:"32.21%",w:"6.8%",h:"10.2%",adv:"1/2 price Luthor Wolfenbaum. Hero auto-finds him."}
+];
+
+// ─── STATE ──────────────────────────────────────────────────────
+let scale = 1, panX = 0, panY = 0, isPanning = false, startPX, startPY;
+const IMG_W = 4000, IMG_H = 2829;
+const map = document.getElementById("map");
+const content = document.getElementById("map-content");
+const stage = document.getElementById("map-stage");
+
+// Campaign management
+let activeCampaignId = null;
+let warbands = [];
+let placements = {};
+let selectedToken = null;
+let loadedFilePath = null;
+
+function cKey(k) { return activeCampaignId ? `mw_c_${activeCampaignId}_${k}` : null; }
+
+function applyCalibration(saved) {
+  if (!Array.isArray(saved)) return;
+  saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
+}
+
+function loadDefaultDistricts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("mw_default_districts"));
+    if (saved && Array.isArray(saved)) applyCalibration(saved);
+  } catch {}
+}
+function saveDefaultDistricts() {
+  const data = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+  localStorage.setItem("mw_default_districts", JSON.stringify(data));
+  // Also trigger file download
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "district_default.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function restoreDefaultDistricts() {
+  const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) throw new Error("Invalid format");
+        localStorage.setItem("mw_default_districts", JSON.stringify(data));
+        applyCalibration(data);
+        // Also save to current campaign so it persists past next reload
+        if (activeCampaignId) localStorage.setItem(cKey("calibration"), JSON.stringify(data));
+        renderMap(); renderWarbandList(); renderDistrictList();
+        alert("Loaded district defaults.");
+      } catch (err) { alert("Invalid file: " + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function initCampaigns() {
+  loadDefaultDistricts();
+  let index;
+  try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (!index || !Array.isArray(index.campaigns) || !index.campaigns.length) {
+    // Migrate old data or create default
+    const ow = (() => { try { return JSON.parse(localStorage.getItem("mw_warbands")) || []; } catch { return []; } })();
+    const op = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem("mw_placements"))); } catch { return {}; } })();
+    let oc; try { oc = JSON.parse(localStorage.getItem("mw_calibration")); } catch {}
+    const id = "camp_" + Date.now();
+    const camp = { id, name: "Default", createdAt: Date.now(), updatedAt: Date.now() };
+    activeCampaignId = id;
+    localStorage.setItem(cKey("warbands"), JSON.stringify(ow));
+    localStorage.setItem(cKey("placements"), JSON.stringify(op));
+    if (oc) localStorage.setItem(cKey("calibration"), JSON.stringify(oc));
+    localStorage.setItem("mw_campaigns", JSON.stringify({ version: 1, campaigns: [camp], activeId: id }));
+    warbands = ow; placements = op;
+    if (oc) { applyCalibration(oc); } else {
+      const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
+      if (def && Array.isArray(def)) { applyCalibration(def); localStorage.setItem(cKey("calibration"), JSON.stringify(def)); }
+    }
+    return;
+  }
+  activeCampaignId = index.activeId || index.campaigns[0].id;
+  const c = index.campaigns.find(x => x.id === activeCampaignId);
+  if (!c) activeCampaignId = index.campaigns[0].id;
+  activeCampaignId = index.campaigns.find(x => x.id === activeCampaignId)?.id || index.campaigns[0].id;
+  warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
+  placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
+  const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
+  if (cal) {
+    applyCalibration(cal);
+  } else {
+    // No campaign calibration yet — save defaults as campaign calibration
+    const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
+    if (def && Array.isArray(def)) localStorage.setItem(cKey("calibration"), JSON.stringify(def));
+    // Recovery: try old mw_calibration key
+    const oldCal = (() => { try { return JSON.parse(localStorage.getItem("mw_calibration")); } catch { return null; } })();
+    if (oldCal) { applyCalibration(oldCal); localStorage.setItem(cKey("calibration"), JSON.stringify(oldCal)); }
+  }
+}
+function applyCalibration(saved) {
+  if (!Array.isArray(saved)) return;
+  saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
+}
+
+function saveCampaigns() {
+  if (!activeCampaignId) return;
+  localStorage.setItem(cKey("warbands"), JSON.stringify(warbands));
+  localStorage.setItem(cKey("placements"), JSON.stringify(placements));
+  const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+  localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (index) {
+    const c = index.campaigns.find(x => x.id === activeCampaignId);
+    if (c) c.updatedAt = Date.now();
+    index.activeId = activeCampaignId;
+    localStorage.setItem("mw_campaigns", JSON.stringify(index));
+  }
+}
+// Backward-compat aliases for code that still calls saveWarbands/savePlacements/saveCalibration
+function saveWarbands() { saveCampaigns(); }
+function savePlacements() { saveCampaigns(); }
+function saveCalibration() { saveCampaigns(); }
+
+function listCampaigns() {
+  try { const i = JSON.parse(localStorage.getItem("mw_campaigns")); return i?.campaigns || []; } catch { return []; }
+}
+function getActiveCampaign() {
+  const all = listCampaigns();
+  return all.find(c => c.id === activeCampaignId) || all[0] || null;
+}
+
+function createCampaign(name) {
+  if (!name || !name.trim()) return;
+  const id = "camp_" + Date.now();
+  const camp = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+  saveCampaigns(); // save current
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (!index) return;
+  index.campaigns.push(camp);
+  index.activeId = id;
+  localStorage.setItem("mw_campaigns", JSON.stringify(index));
+  activeCampaignId = id;
+  warbands = []; placements = {};
+  const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+  localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
+  renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
+}
+
+function switchCampaign(id) {
+  if (id === activeCampaignId || !id) return;
+  saveCampaigns();
+  activeCampaignId = id;
+  warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
+  placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
+  const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
+  if (cal) applyCalibration(cal);
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (index) { index.activeId = id; localStorage.setItem("mw_campaigns", JSON.stringify(index)); }
+  renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
+}
+
+function renameCampaign(id, name) {
+  if (!name || !name.trim() || !id) return;
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (!index) return;
+  const c = index.campaigns.find(x => x.id === id);
+  if (c) { c.name = name; c.updatedAt = Date.now(); localStorage.setItem("mw_campaigns", JSON.stringify(index)); }
+  updateCampaignUI();
+}
+
+function deleteCampaign(id) {
+  const all = listCampaigns();
+  if (all.length <= 1) { alert("Cannot delete the last campaign."); return; }
+  if (!confirm(`Delete campaign "${all.find(c=>c.id===id)?.name}" and all its data?`)) return;
+  const wasActive = id === activeCampaignId;
+  localStorage.removeItem(`mw_c_${id}_warbands`);
+  localStorage.removeItem(`mw_c_${id}_placements`);
+  localStorage.removeItem(`mw_c_${id}_calibration`);
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (index) {
+    index.campaigns = index.campaigns.filter(x => x.id !== id);
+    if (index.activeId === id) index.activeId = index.campaigns[0]?.id || null;
+    localStorage.setItem("mw_campaigns", JSON.stringify(index));
+  }
+  if (wasActive) {
+    const r = listCampaigns();
+    if (r.length) {
+      activeCampaignId = r[0].id;
+      warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
+      placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
+      const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
+      if (cal) applyCalibration(cal);
+      renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
+    }
+  }
+}
+
+function updateCampaignUI() {
+  const cam = getActiveCampaign();
+  document.getElementById("camp-name-display").textContent = cam ? cam.name : "—";
+  const list = document.getElementById("camp-list");
+  if (!list) return;
+  const all = listCampaigns();
+  list.innerHTML = all.map(c => {
+    const active = c.id === activeCampaignId;
+    return `<div class="camp-row${active ? ' active' : ''}">
+      <span class="camp-row-name">${c.name}</span>
+      ${active ? '<span style="font-size:10px;color:var(--accent)">active</span>' : `<button class="camp-switch" data-cid="${c.id}">Switch</button>`}
+      ${!active ? '' : `<button class="camp-rename" data-cid="${c.id}">✎</button><button class="camp-delete" data-cid="${c.id}">✕</button>`}
+    </div>`;
+  }).join('');
+}
+
+function migratePlacements(raw) {
+  const migrated = {};
+  Object.entries(raw||{}).forEach(([dId, val]) => {
+    if (val && val.warbandId) migrated[dId] = { [val.warbandId]: val.status || 'explored' };
+    else if (val && typeof val === 'object') migrated[dId] = val;
+  });
+  return migrated;
+}
+
+function getPlacementMap(dId) { return placements[dId] || {}; }
+function getWarbandStatus(dId, wbId) { return getPlacementMap(dId)[wbId] || null; }
+
+function getAllData() {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    campaigns: listCampaigns().map(c => {
+      const k = `mw_c_${c.id}`;
+      let wb, pl, ca;
+      try { wb = JSON.parse(localStorage.getItem(k + "_warbands")); } catch {}
+      try { pl = JSON.parse(localStorage.getItem(k + "_placements")); } catch {}
+      try { ca = JSON.parse(localStorage.getItem(k + "_calibration")); } catch {}
+      return { id: c.id, name: c.name, createdAt: c.createdAt, warbands: wb || [], placements: pl || {}, calibration: ca || [] };
+    })
+  };
+}
+function loadAllData(data) {
+  if (!data.campaigns || !Array.isArray(data.campaigns)) return;
+  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+  if (!index) index = { version: 1, campaigns: [], activeId: null };
+  data.campaigns.forEach(c => {
+    if (!c.id || !c.name) return;
+    const existing = index.campaigns.find(x => x.id === c.id);
+    if (existing) existing.name = c.name;
+    else index.campaigns.push({ id: c.id, name: c.name, createdAt: c.createdAt || Date.now(), updatedAt: Date.now() });
+    localStorage.setItem(`mw_c_${c.id}_warbands`, JSON.stringify(c.warbands || []));
+    localStorage.setItem(`mw_c_${c.id}_placements`, JSON.stringify(c.placements || {}));
+    localStorage.setItem(`mw_c_${c.id}_calibration`, JSON.stringify(c.calibration || []));
+  });
+  localStorage.setItem("mw_campaigns", JSON.stringify(index));
+  // Switch without saving current
+  if (data.campaigns.length) {
+    activeCampaignId = data.campaigns[0].id;
+    warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
+    placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
+    const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
+    if (cal) applyCalibration(cal);
+    renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
+  }
+}
+function saveToFile() {
+  const blob = new Blob([JSON.stringify(getAllData(), null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "mordheim-campaigns.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function loadFromFile() {
+  const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try { loadAllData(JSON.parse(ev.target.result)); alert("Loaded " + file.name); }
+      catch (err) { alert("Invalid file: " + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ─── RULES HTML ──────────────────────────────────────────────────
+const RULES_HTML = `<div class="rules-content">
+<h2>Campaign Rules</h2>
+<p>Warbands are created with a base value of <span class="highlight">500 gold crowns</span>, as indicated in the rule book. The campaign begins just after the fall of the comet; all districts in Mordheim are still unexplored.</p>
+
+<h2>Explore the Districts</h2>
+<p>Each battle takes place in one of the districts of Mordheim, circled on the map. At the start of the battle, the warbands arrive from surrounding encampments, entering via one of <span class="highlight">The Gates of Mordheim</span>.</p>
+<p>Subsequent battles can only take place in a district that can be reached by at least one of the warbands. The warband must be able to connect a path from any gate to the district via explored neighbouring districts.</p>
+<p>Opponents should agree on which district to battle over. If they cannot, they should each propose one district which they can reach and roll off.</p>
+<p>Players who have fought in a district are considered to have <span class="highlight">explored</span> that district and can now reach its neighbouring districts. Mark the map to show which warbands have explored which district.</p>
+
+<h2>The Advantages of Districts</h2>
+<p>A warband which wins a battle in a district gains a <span class="highlight">foothold</span> in that district, with the defeated warband losing its foothold if it has one. Make a note on the map for all to see.</p>
+<p>Warbands who have a foothold in a district gain the benefits and advantages of that district as noted in the legend; some are specific to the controlling warband only (see <span class="highlight">Hard Fought District</span>).</p>
+<p>As warbands vie for control over a district, the following rules apply:</p>
+<div class="note"><strong>Fighting in a district where one warband controls it:</strong> The warband attempts to seize control from another. Play <strong>Scenario 9: Surprise Attack</strong>. The defender is the warband with the foothold.</div>
+<div class="note"><strong>Fighting in a district where both warbands have a foothold:</strong> Both warbands wrestle for control. Play <strong>Scenario 1: Defend the Find</strong>. The winning warband gains +1 extra Experience.</div>
+
+<h2>Winning the Campaign</h2>
+<p>Before the start of the campaign, participating players or a Games Master should determine the winning objectives, campaign length, and which optional rules from the rule book to use.</p>
+<p>The campaign's length could be a fixed number of months, or limited to a certain amount of games per player. Alternatively, the campaign could end once one warband achieves a set objective, such as controlling a certain number of districts or accumulating a specific amount of wyrdstone.</p>
+<p>Players are encouraged to come up with a narrative behind their warband achieving this objective and what will happen once they do.</p>
+
+<h2>Points of Interest</h2>
+<div class="symbol-grid">
+  <div class="symbol-card">
+    <strong><span class="rule-icon" style="color:#ffd700">★</span> Abundance of Wyrdstone <span style="color:#ffd700">☄</span></strong>
+    Districts with the twin-tailed comet symbol are rich in wyrdstone. The winner of a battle there gains <span class="highlight">+1D3 wyrdstone shards</span>.
+  </div>
+  <div class="symbol-card">
+    <strong><span class="rule-icon" style="color:#4ade80">◆</span> Hard Fought District <span style="color:#4ade80">◇</span></strong>
+    Districts with the dead fish symbol are constantly fought over. Only the controlling warband can gain the benefits. Does not affect Abundance of Wyrdstone.
+  </div>
+  <div class="symbol-card">
+    <strong><span class="rule-icon" style="color:#94a3b8">☠</span> The Gates of Mordheim <span style="color:#94a3b8">⎔</span></strong>
+    The four gates are the entrances to Mordheim (marked with a skull). Warbands without a foothold at a gate must pay <span class="highlight">5 gc</span> before passing through to battle in another district.
+  </div>
+</div>
+
+<h2>Districts</h2>
+<ul>
+<li><strong>Artisan Quarters</strong> — ½ price Cathayan Silk Clothes, Hunting Arrows, Lantern, Net, Rope &amp; Hook, Superior Blackpowder.</li>
+<li><strong>Count Steinhardt's Palace</strong> — ½ price to hire Freelancer. ½ price Horse, Warhorse and Wardog.</li>
+<li><strong>Dwarven District</strong> — ½ price to hire Dwarf Troll Slayer. ½ price Bugman's Ale, Gromril Armour and Gromril Weapons.</li>
+<li><strong>Executioner's Square</strong> — Roll one extra dice in the Exploration Procedure.</li>
+<li><strong>Memorial Gardens</strong> — Roll 3D6 for experience when recruiting for existing, non-human Henchmen groups.</li>
+<li><strong>Raven Barracks</strong> — ½ price to hire Ogre Bodyguard. You can resell weapons and armour at purchase price.</li>
+<li><strong>Rich Quarter</strong> — Always find the maximum amount of gold or equipment on the Exploration Chart.</li>
+<li><strong>Statue of Count Gotthard</strong> — The warband's leader gains +1 Ld.</li>
+<li><strong>Temple of Morr</strong> — Hero injury 11-15 Dead becomes Full Recovery on 5+.</li>
+<li><strong>The Cemetery</strong> — Undead: Zombies 10gc, Ghouls 30gc. Others: immune to Fear, Terror treated as Fear.</li>
+<li><strong>The Gaol</strong> — ½ price Gaoler. Injury 61 Captured becomes Full Recovery.</li>
+<li><strong>Amphitheatre</strong> — ½ price Pit Fighter. ½ price Net. Injury 65 auto-win.</li>
+<li><strong>City Hall</strong> — Modify one Exploration dice by +1 or -1.</li>
+<li><strong>Clock Tower</strong> — Always find the maximum amount of gold or equipment on the Exploration Chart.</li>
+<li><strong>Fence Alley</strong> — ½ price Poisons and Drugs.</li>
+<li><strong>Little Moot</strong> — ½ price Halfling Scout. ½ price Halfling Cookbook.</li>
+<li><strong>Merchants' Quarter</strong> — ½ price Elf Ranger. ½ price Elf Bow, Elven Cloak, Ithilmar Armour and Ithilmar Weapon.</li>
+<li><strong>Market Square</strong> — Add +2 on the rare items roll.</li>
+<li><strong>Poor Quarter</strong> — Roll one extra dice in the Exploration Procedure.</li>
+<li><strong>Quayside</strong> — Roll 3D6 for experience when recruiting for existing human Henchmen groups.</li>
+<li><strong>Sage's Hall</strong> — ½ price Warlock. ½ price Tome of Magic. You may choose a spell rather than randomly generating it.</li>
+<li><strong>Temple of Sigmar</strong> — Hero injury 22-35 becomes Full Recovery on 5+.</li>
+<li><strong>The Great Library</strong> — ½ price Halfling Cookbook, Holy Tome, Mordheim Map and Tome of Magic.</li>
+<li><strong>The Pit</strong> — Exploration result may be changed to The Pit. Cult of Possessed Heroes always return with max wyrdstone.</li>
+<li><strong>Middle Bridge</strong> — The controlling warband gains 2D6 gc when another warband passes through.</li>
+<li><strong>The Rock</strong> — Sisters of Sigmar: sell wyrdstone for +20% gold.</li>
+<li><strong>River Gate</strong> — ½ price Luthor Wolfenbaum. Hero auto-finds him.</li>
+<li><strong>East Gate</strong> — ½ price Luthor Wolfenbaum. Hero auto-finds him.</li>
+<li><strong>South Gate</strong> — ½ price Luthor Wolfenbaum. Hero auto-finds him.</li>
+<li><strong>West Gate</strong> — ½ price Luthor Wolfenbaum. Hero auto-finds him.</li>
+</ul>
+</div>`;
+
+// ─── TOKEN IMAGE HELPERS ────────────────────────────────────────
+function tokenSvg(symId) {
+  return `<img src="${TOKEN_PATH}${symId}_explored.jpg" alt="${symId}" style="width:100%;height:100%;display:block">`;
+}
+
+function footholdSvg(symId) {
+  return `<img src="${TOKEN_PATH}${symId}_foothold.jpg" alt="${symId}" style="width:100%;height:100%;display:block">`;
+}
+
+// ─── MAP RENDER ─────────────────────────────────────────────────
+function renderMap() {
+  // Clear old districts and tokens
+  stage.querySelectorAll(".dist-zone-wrap, .token-marker").forEach(el => el.remove());
+
+  // Draw district hit zones
+  DISTRICTS.forEach((d, i) => {
+    const wrap = document.createElement("div");
+    wrap.className = "dist-zone-wrap";
+    wrap.style.cssText = `left:${d.l};top:${d.t};width:${d.w};height:${d.h}`;
+
+    // Circular zone — size is min of w/h to keep circle inside bounds
+    const zoneSize = `min(${d.w},${d.h})`;
+    const zone = document.createElement("div");
+    zone.className = "district-zone";
+    zone.style.cssText = `width:${zoneSize};height:${zoneSize};`;
+    zone.addEventListener("click", e => onDistrictClick(i, e));
+    wrap.appendChild(zone);
+
+    // Tooltip via fixed overlay
+    wrap.addEventListener("mouseenter", e => showTooltip(i, e));
+    wrap.addEventListener("mousemove", e => moveTooltip(e));
+    wrap.addEventListener("mouseleave", hideTooltip);
+
+    // Touch tooltip
+    wrap.addEventListener("touchstart", () => showTooltip(i, null), { passive: true });
+
+    stage.appendChild(wrap);
+  });
+
+  // Draw token markers
+  Object.entries(placements).forEach(([distId, map]) => {
+    const dist = DISTRICTS.find(d => d.id === distId);
+    if (!dist) return;
+    const l = parseFloat(dist.l), t = parseFloat(dist.t);
+    const w = parseFloat(dist.w), h = parseFloat(dist.h);
+    const cx = l + w/2;
+    const cy = t + h/2;
+
+    // Sort: foothold last (rendered on top)
+    const entries = Object.entries(map).sort((a, b) => a[1] === 'foothold' ? 1 : b[1] === 'foothold' ? -1 : 0);
+
+    // Stack tokens at center, foothold on top, with a slight cascade for the rest
+    const total = entries.length;
+    const stackSize = Math.min(parseFloat(dist.w), parseFloat(dist.h)) * 0.5;
+    const cascadePx = total > 1 ? 3 : 0; // small cascade so you can see multiple tokens
+
+    entries.forEach(([wbId, status], idx) => {
+      const wb = warbands.find(w => w.id === wbId);
+      if (!wb || !wb.tokenId) return;
+      const isFoothold = status === 'foothold';
+
+      const marker = document.createElement("div");
+      marker.className = "token-marker";
+      const markerSize = isFoothold ? stackSize : stackSize * 0.85;
+      const left = cx - markerSize/2;
+      const top = cy - markerSize/2;
+      // cascade non-foothold tokens slightly so you see the stack
+      const cascade = isFoothold ? 0 : (idx - (total - 1) / 2) * cascadePx;
+      marker.style.cssText = `left:${left}%;top:${top}%;width:${markerSize}%;height:${markerSize}%;z-index:${isFoothold ? 17 : 12};${cascade ? `transform:translate(${cascade}px,${cascade}px)` : ''}`;
+      marker.dataset.district = distId;
+      marker.title = wb.name + (isFoothold ? ' (foothold)' : '');
+
+      const svg = isFoothold ? footholdSvg(wb.tokenId) : tokenSvg(wb.tokenId);
+      marker.innerHTML = svg;
+
+      // Drag to reposition
+      marker.addEventListener("mousedown", e => {
+        e.stopPropagation();
+        startDrag(e, distId, wbId);
+      });
+      marker.addEventListener("touchstart", e => {
+        e.stopPropagation();
+        e.preventDefault();
+        startDrag(e, distId, wbId);
+      }, { passive: false });
+
+      stage.appendChild(marker);
+    });
+  });
+
+  // Re-apply calibration visuals if active
+  if (calMode || zonesVisible) {
+    stage.classList.add("cal-highlight");
+    if (calMode || zonesVisible) {
+      const wraps = stage.querySelectorAll(".dist-zone-wrap");
+      wraps.forEach(w => {
+        if (calMode || zonesVisible) {
+          w.style.border = "2.5px solid rgba(255,220,60,.85)";
+          w.style.background = "rgba(255,220,60,.13)";
+          w.style.borderRadius = "50%";
+        }
+      });
+    }
+  } else {
+    stage.classList.remove("cal-highlight");
+  }
+}
+
+// ─── DRAG TOKENS ────────────────────────────────────────────────
+let dragData = null;
+function startDrag(e, distId, wbId) {
+  const t = e.touches ? e.touches[0] : e;
+  const r = map.getBoundingClientRect();
+  dragData = { distId, wbId, offsetX: t.clientX, offsetY: t.clientY };
+
+  // Create floating ghost
+  const ghost = document.createElement("div");
+  ghost.id = "drag-ghost";
+  ghost.style.cssText = "position:fixed;pointer-events:none;z-index:999;width:48px;height:48px;opacity:.7";
+  const wb = warbands.find(w => w.id === wbId);
+  if (wb && wb.tokenId) {
+    const svg = getWarbandStatus(distId, wbId) === 'foothold' ? footholdSvg(wb.tokenId) : tokenSvg(wb.tokenId);
+    ghost.innerHTML = svg;
+  }
+  ghost.style.left = (t.clientX - 24) + "px";
+  ghost.style.top = (t.clientY - 24) + "px";
+  document.body.appendChild(ghost);
+}
+
+document.addEventListener("mousemove", e => {
+  if (!dragData) return;
+  const ghost = document.getElementById("drag-ghost");
+  if (ghost) {
+    ghost.style.left = (e.clientX - 24) + "px";
+    ghost.style.top = (e.clientY - 24) + "px";
+  }
+});
+document.addEventListener("mouseup", e => {
+  if (!dragData) return;
+  const ghost = document.getElementById("drag-ghost");
+  if (ghost) ghost.remove();
+
+  // Check if dropped on a district
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const zoneWrap = el?.closest(".dist-zone-wrap");
+  if (zoneWrap) {
+    const idx = Array.from(stage.querySelectorAll(".dist-zone-wrap")).indexOf(zoneWrap);
+    if (idx >= 0) {
+      const targetDist = DISTRICTS[idx];
+      const { distId: srcDistId, wbId } = dragData;
+      if (wbId && targetDist.id !== srcDistId) {
+        // Remove from source district
+        const srcMap = placements[srcDistId];
+        if (srcMap) {
+          delete srcMap[wbId];
+          if (!Object.keys(srcMap).length) delete placements[srcDistId];
+        }
+        // Add to target district
+        const targetMap = placements[targetDist.id] = placements[targetDist.id] || {};
+        targetMap[wbId] = 'explored';
+        savePlacements();
+        renderMap();
+        renderWarbandList();
+        renderDistrictList();
+      }
+    }
+  }
+  dragData = null;
+});
+
+// Touch drag
+document.addEventListener("touchmove", e => {
+  if (!dragData) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const ghost = document.getElementById("drag-ghost");
+  if (ghost) {
+    ghost.style.left = (t.clientX - 24) + "px";
+    ghost.style.top = (t.clientY - 24) + "px";
+  }
+}, { passive: false });
+document.addEventListener("touchend", e => {
+  if (!dragData) return;
+  const ghost = document.getElementById("drag-ghost");
+  if (ghost) ghost.remove();
+  const t = e.changedTouches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const zoneWrap = el?.closest(".dist-zone-wrap");
+  if (zoneWrap) {
+    const idx = Array.from(stage.querySelectorAll(".dist-zone-wrap")).indexOf(zoneWrap);
+    if (idx >= 0) {
+      const targetDist = DISTRICTS[idx];
+      const { distId: srcDistId, wbId } = dragData;
+      if (wbId && targetDist.id !== srcDistId) {
+        // Remove from source district
+        const srcMap = placements[srcDistId];
+        if (srcMap) {
+          delete srcMap[wbId];
+          if (!Object.keys(srcMap).length) delete placements[srcDistId];
+        }
+        // Add to target district
+        const targetMap = placements[targetDist.id] = placements[targetDist.id] || {};
+        targetMap[wbId] = 'explored';
+        savePlacements();
+        renderMap();
+        renderWarbandList();
+        renderDistrictList();
+      }
+    }
+  }
+  dragData = null;
+});
+
+// ─── DISTRICT CLICK ─────────────────────────────────────────────
+let menuDistIdx = -1;
+const menuEl = document.createElement("div");
+menuEl.id = "dist-menu";
+document.body.appendChild(menuEl);
+
+function onDistrictClick(idx, e) {
+  closeMenu();
+  menuDistIdx = idx;
+  const d = DISTRICTS[idx];
+  const activeWbs = warbands.filter(w => w.active);
+  const map = getPlacementMap(d.id);
+  const hasAny = Object.keys(map).length > 0;
+  let html = `<div class="dm-title">${d.name} <span style="font-weight:400;font-size:10px;color:var(--text2)">(${Object.keys(map).length})</span></div>`;
+
+  // None option
+  html += `<div class="dm-opt ${!hasAny ? 'active' : ''}" data-idx="${idx}" data-wb-id="">
+    <span style="width:24px;text-align:center;color:var(--text2)">—</span>
+    <span class="dm-label">None</span>
+  </div>`;
+
+  // Warbands
+  activeWbs.forEach(w => {
+    const status = map[w.id];
+    html += `<div class="dm-row">
+      <img src="${TOKEN_PATH}${w.tokenId}_explored.jpg" alt="">
+      <span class="dm-label">${w.name}</span>
+      <div class="dm-btns">
+        <button class="dm-btn${!status ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="">—</button>
+        <button class="dm-btn${status === 'explored' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="explored">●</button>
+        <button class="dm-btn${status === 'foothold' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="foothold">⚜</button>
+      </div>
+    </div>`;
+  });
+
+  menuEl.innerHTML = html;
+  menuEl.classList.add("show");
+  if (e) {
+    let x = e.clientX + 8, y = e.clientY + 8;
+    const r = menuEl.getBoundingClientRect();
+    if (x + r.width > window.innerWidth - 10) x = window.innerWidth - r.width - 10;
+    if (y + r.height > window.innerHeight - 10) y = window.innerHeight - r.height - 10;
+    menuEl.style.left = x + "px";
+    menuEl.style.top = y + "px";
+  }
+  menuOpenTs = Date.now();
+}
+
+function setPlacement(idx, warbandId, status) {
+  const d = DISTRICTS[idx];
+  const map = placements[d.id] = placements[d.id] || {};
+
+  if (!warbandId) {
+    // None — remove all
+    delete placements[d.id];
+  } else if (status === '') {
+    // Remove this warband
+    delete map[warbandId];
+    if (!Object.keys(map).length) delete placements[d.id];
+  } else if (status === 'foothold') {
+    // Set as foothold, demote any existing foothold
+    Object.keys(map).forEach(k => { if (map[k] === 'foothold') map[k] = 'explored'; });
+    map[warbandId] = 'foothold';
+  } else {
+    // Set as explored
+    map[warbandId] = 'explored';
+  }
+  savePlacements();
+  renderMap();
+  renderWarbandList();
+  renderDistrictList();
+  closeMenu();
+}
+
+function closeMenu() {
+  menuEl.classList.remove("show");
+  menuDistIdx = -1;
+}
+
+// Position menu on click and close on outside click
+let menuOpenTs = 0;
+document.addEventListener("click", e => {
+  const menu = document.getElementById("dist-menu");
+  if (e.target.closest(".district-zone") || e.target.closest(".dist-zone-wrap")) {
+    setTimeout(() => {
+      if (menu.classList.contains("show")) {
+        let x = e.clientX + 8, y = e.clientY + 8;
+        const r = menu.getBoundingClientRect();
+        if (x + r.width > window.innerWidth - 10) x = window.innerWidth - r.width - 10;
+        if (y + r.height > window.innerHeight - 10) y = window.innerHeight - r.height - 10;
+        menu.style.left = x + "px";
+        menu.style.top = y + "px";
+      }
+    }, 10);
+  } else if (!e.target.closest("#dist-menu") && e.target.closest(".dist-item") === null) {
+    if (Date.now() - menuOpenTs < 100) return;
+    closeMenu();
+  }
+});
+document.addEventListener("touchstart", e => {
+  if (!e.target.closest("#dist-menu") && !e.target.closest(".district-zone") && !e.target.closest(".dist-zone-wrap")) {
+    closeMenu();
+  }
+}, { passive: true });
+
+// Event delegation for menu options (avoids inline onclick, which may be blocked on file://)
+menuEl.addEventListener("click", e => {
+  const btn = e.target.closest(".dm-btn");
+  if (btn) {
+    const idx = parseInt(btn.dataset.idx);
+    setPlacement(idx, btn.dataset.wbId, btn.dataset.status);
+    return;
+  }
+  const opt = e.target.closest(".dm-opt");
+  if (opt) {
+    const idx = parseInt(opt.dataset.idx);
+    setPlacement(idx, opt.dataset.wbId || null, null);
+  }
+});
+// Event delegation for district list items
+document.getElementById("tab-map").addEventListener("click", e => {
+  const item = e.target.closest(".dist-item");
+  if (!item) return;
+  onDistrictClick(parseInt(item.dataset.idx), e);
+});
+// Event delegation for warband list actions
+document.getElementById("tab-warbands").addEventListener("click", e => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  if (action === 'add-wb') { openWbDialog(); return; }
+  const id = btn.dataset.id;
+  if (action === 'edit-wb') editWarband(id);
+  else if (action === 'toggle-wb') toggleWbActive(id);
+  else if (action === 'del-wb') delWarband(id);
+});
+// Event delegation for token palette
+document.getElementById("token-palette").addEventListener("click", e => {
+  const opt = e.target.closest(".token-opt");
+  if (!opt) return;
+  pickToken(opt.dataset.sym, opt);
+});
+// Event delegation for campaign list
+document.getElementById("camp-list").addEventListener("click", e => {
+  const cid = e.target.dataset.cid;
+  if (!cid) return;
+  if (e.target.classList.contains("camp-switch")) switchCampaign(cid);
+  else if (e.target.classList.contains("camp-rename")) renameCampaign(cid, prompt("Rename to:", listCampaigns().find(c=>c.id===cid)?.name));
+  else if (e.target.classList.contains("camp-delete")) deleteCampaign(cid);
+});
+
+// ─── ZOOM / PAN ─────────────────────────────────────────────────
+function applyTransform() {
+  content.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+}
+
+map.addEventListener("mousedown", e => {
+  if (e.target.closest(".district-zone") || e.target.closest(".token-marker") || e.target.tagName === "BUTTON") return;
+  if (e.target.closest(".dist-zone-wrap")) return;
+  if (dragData) return;
+  isPanning = true;
+  startPX = e.clientX - panX;
+  startPY = e.clientY - panY;
+});
+document.addEventListener("mousemove", e => {
+  if (!isPanning) return;
+  panX = e.clientX - startPX;
+  panY = e.clientY - startPY;
+  applyTransform();
+});
+document.addEventListener("mouseup", () => { isPanning = false; });
+
+map.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = map.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const ns = Math.max(0.5, Math.min(4, scale + (e.deltaY > 0 ? -0.08 : 0.08)));
+  const ratio = ns / scale;
+  panX = mx - ratio * (mx - panX);
+  panY = my - ratio * (my - panY);
+  scale = ns;
+  applyTransform();
+}, { passive: false });
+
+function zoomIn() {
+  const r = map.getBoundingClientRect();
+  const mx = r.width/2, my = r.height/2;
+  const ns = Math.min(4, scale + 0.3);
+  const ratio = ns/scale;
+  panX = mx - ratio*(mx-panX); panY = my - ratio*(my-panY);
+  scale = ns; applyTransform();
+}
+function zoomOut() {
+  const r = map.getBoundingClientRect();
+  const mx = r.width/2, my = r.height/2;
+  const ns = Math.max(0.5, scale - 0.3);
+  const ratio = ns/scale;
+  panX = mx - ratio*(mx-panX); panY = my - ratio*(my-panY);
+  scale = ns; applyTransform();
+}
+function resetView() { centerView(); }
+function centerView() {
+  const cw = map.clientWidth, ch = map.clientHeight;
+  scale = Math.min(cw / IMG_W, ch / IMG_H) * 0.9;
+  panX = (cw - IMG_W * scale) / 2;
+  panY = (ch - IMG_H * scale) / 2;
+  applyTransform();
+}
+function autoCenter() {
+  if (panX === 0 && panY === 0) {
+    const cw = map.clientWidth, ch = map.clientHeight;
+    const fitScale = Math.min(cw / IMG_W, ch / IMG_H) * 0.9;
+    scale = Math.max(0.5, Math.min(4, fitScale));
+    panX = (cw - IMG_W * scale) / 2;
+    panY = (ch - IMG_H * scale) / 2;
+    applyTransform();
+  }
+}
+window.addEventListener("resize", autoCenter);
+
+// Touch support
+let lastTouchDist = 0;
+map.addEventListener("touchstart", e => {
+  if (e.target.closest(".token-marker") || e.target.closest(".district-zone")) return;
+  const t = Array.from(e.touches);
+  if (t.length === 1) {
+    isPanning = true;
+    startPX = t[0].clientX - panX;
+    startPY = t[0].clientY - panY;
+  } else if (t.length === 2) {
+    isPanning = false;
+    lastTouchDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+  }
+}, { passive: true });
+map.addEventListener("touchmove", e => {
+  if (!isPanning) return;
+  e.preventDefault();
+  const t = Array.from(e.touches);
+  if (t.length === 1) {
+    panX = t[0].clientX - startPX;
+    panY = t[0].clientY - startPY;
+    applyTransform();
+  } else if (t.length === 2) {
+    const dist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    const r = map.getBoundingClientRect();
+    const mx = (t[0].clientX+t[1].clientX)/2 - r.left;
+    const my = (t[0].clientY+t[1].clientY)/2 - r.top;
+    const ns = Math.max(0.5, Math.min(4, scale + (dist-lastTouchDist)/100));
+    const ratio = ns/scale;
+    panX = mx - ratio*(mx-panX);
+    panY = my - ratio*(my-panY);
+    scale = ns;
+    lastTouchDist = dist;
+    applyTransform();
+  }
+}, { passive: false });
+map.addEventListener("touchend", () => { isPanning = false; });
+
+// ─── SIDEBAR ────────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("overlay").style.display = document.getElementById("sidebar").classList.contains("open") ? "block" : "none";
+}
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  document.getElementById("overlay").style.display = "none";
+}
+
+function openSidebarTab(tab) {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar.classList.contains("open")) toggleSidebar();
+  const map = { warbands:1, map:2, rules:3, settings:4 };
+  switchTab(tab, document.querySelector(`#tabs button:nth-child(${map[tab] || 3})`));
+}
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-content").forEach(el => el.style.display = "none");
+  document.getElementById("tab-" + name).style.display = "block";
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  if (name === "warbands") renderWarbandList();
+  if (name === "map") renderDistrictList();
+  if (name === "rules") renderRules();
+}
+
+function renderRules() {
+  const el = document.getElementById("tab-rules");
+  if (!el.innerHTML) el.innerHTML = RULES_HTML;
+}
+
+// ─── WARBAND DIALOG ─────────────────────────────────────────────
+function openWbDialog() {
+  selectedToken = null;
+  document.getElementById("wb-name").value = "";
+  document.getElementById("wb-dialog").classList.add("open");
+  renderTokenPalette();
+  document.getElementById("wb-name").focus();
+}
+function closeWbDialog() {
+  document.getElementById("wb-dialog").classList.remove("open");
+}
+
+function renderTokenPalette() {
+  const el = document.getElementById("token-palette");
+  el.innerHTML = TOKENS.map(t => {
+    const sel = selectedToken === t.id ? "selected" : "";
+    return `<div class="token-opt ${sel}" data-sym="${t.id}">
+      <img src="${TOKEN_PATH}${t.id}_explored.jpg" alt="${t.name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block">
+    </div>`;
+  }).join("");
+  if (!selectedToken && TOKENS.length) {
+    pickToken(TOKENS[0].id, el.querySelector("[data-sym]"));
+  }
+}
+
+function pickToken(sym, el) {
+  selectedToken = sym;
+  document.querySelectorAll(".token-opt").forEach(e => e.classList.remove("selected"));
+  if (el) el.classList.add("selected");
+}
+
+function createWarband() {
+  const name = document.getElementById("wb-name").value.trim();
+  if (!name) { alert("Enter a warband name"); return; }
+  if (!selectedToken) { alert("Pick a token"); return; }
+
+  warbands.push({
+    id: "wb_" + Date.now(),
+    name: name,
+    tokenId: selectedToken,
+    gold: 0, wyrdstone: 0, rating: 0, wins: 0, losses: 0, active: true
+  });
+  saveWarbands();
+  closeWbDialog();
+  renderWarbandList();
+  renderMap();
+}
+
+function delWarband(id) {
+  if (!confirm("Delete this warband?")) return;
+  warbands = warbands.filter(w => w.id !== id);
+  Object.keys(placements).forEach(k => {
+    delete placements[k][id];
+    if (!Object.keys(placements[k]).length) delete placements[k];
+  });
+  saveWarbands();
+  savePlacements();
+  renderWarbandList();
+  renderMap();
+  renderDistrictList();
+}
+
+function editWarband(id) {
+  const wb = warbands.find(w => w.id === id);
+  if (!wb) return;
+  const name = prompt("Warband name:", wb.name);
+  if (name) wb.name = name;
+  const gold = prompt("Gold crowns:", wb.gold);
+  if (gold !== null) wb.gold = parseInt(gold) || 0;
+  const wyrd = prompt("Wyrdstone shards:", wb.wyrdstone);
+  if (wyrd !== null) wb.wyrdstone = parseInt(wyrd) || 0;
+  saveWarbands();
+  renderWarbandList();
+  renderMap();
+}
+
+function toggleWbActive(id) {
+  const wb = warbands.find(w => w.id === id);
+  if (wb) { wb.active = !wb.active; saveWarbands(); renderWarbandList(); renderMap(); }
+}
+
+function renderWarbandList() {
+  const el = document.getElementById("tab-warbands");
+  let html = `<div style="display:flex;gap:6px;margin-bottom:12px">
+    <button class="map-btn" data-action="add-wb" style="flex:1;justify-content:center;font-size:12px;width:auto">+ Add Warband</button>
+  </div>`;
+
+  if (!warbands.length) {
+    html += `<p style="font-size:11px;color:var(--text2)">No warbands yet. Create one to start placing tokens on the map.</p>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  warbands.forEach(w => {
+    const pCount = Object.values(placements).filter(p => p[w.id]).length;
+    const footholdCount = Object.values(placements).filter(p => p[w.id] === 'foothold').length;
+    const imgHtml = tokenSvg(w.tokenId);
+    html += `<div class="wb-card" style="opacity:${w.active ? 1 : .4}">
+      <div class="token-preview">${imgHtml}</div>
+      <div class="info">
+        <h3>${w.name}</h3>
+        <div class="stats">
+          <span>${w.gold} gc</span>
+          <span>${w.wyrdstone} ws</span>
+          <span>${pCount} dist</span>
+          <span>${footholdCount} fh</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button data-action="edit-wb" data-id="${w.id}" title="Edit">✎</button>
+        <button data-action="toggle-wb" data-id="${w.id}" title="Toggle active">${w.active ? '◉' : '○'}</button>
+        <button data-action="del-wb" data-id="${w.id}" title="Delete">✕</button>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+// ─── DISTRICT LIST ──────────────────────────────────────────────
+function renderDistrictList() {
+  const el = document.getElementById("tab-map");
+  let html = `<p style="font-size:11px;color:var(--text2);margin-bottom:8px">Click a district on the map to place/cycle tokens. Drag tokens between districts.</p>`;
+
+  html += DISTRICTS.map(d => {
+    const map = getPlacementMap(d.id);
+    const entries = Object.keys(map);
+    let badge = "";
+    if (entries.length) {
+      const names = entries.map(id => {
+        const wb = warbands.find(w => w.id === id);
+        const label = map[id] === 'foothold' ? '⚜' : '●';
+        return `${label} ${wb ? wb.name : id}`;
+      });
+      badge = `<span style="font-size:10px;color:var(--accent)">${names.join(', ')}</span>`;
+    }
+    return `<div class="dist-item" data-idx="${DISTRICTS.indexOf(d)}" style="padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--text2);display:flex;justify-content:space-between;align-items:center">
+      <span>${d.name} <span style="font-size:10px;color:var(--text2)">(${entries.length})</span></span>
+      ${badge ? `<span>${badge}</span>` : '<span style="font-size:10px;color:var(--border)">—</span>'}
+    </div>`;
+  }).join("");
+
+  el.innerHTML = html;
+}
+
+// ─── SETTINGS ───────────────────────────────────────────────────
+function clearData() {
+  if (!confirm("Reset all campaign data? This will also reset calibrated positions.")) return;
+  const k = cKey("warbands");
+  if (!k) return;
+  localStorage.removeItem(k);
+  localStorage.removeItem(cKey("placements"));
+  localStorage.removeItem(cKey("calibration"));
+  warbands = [];
+  placements = {};
+  renderMap();
+  renderWarbandList();
+  renderDistrictList();
+}
+
+// ─── CALIBRATION ────────────────────────────────────────────────
+let calMode = false;
+let pickerMode = false;
+let zonesVisible = false;
+
+function toggleCal() {
+  calMode = !calMode;
+  const panel = document.getElementById("cal-panel");
+  const calSection = document.getElementById("cal-section");
+  panel.classList.toggle("show", calMode);
+
+  if (calMode) {
+    fillCalSelect();
+    if (calSection) calSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  updateCalUI();
+  renderMap();
+}
+
+function togglePickMode() {
+  pickerMode = !pickerMode;
+  const btn = document.getElementById("pickBtn");
+  btn.textContent = pickerMode ? "Click map..." : "Pick";
+  btn.style.background = pickerMode ? "var(--accent)" : "";
+  map.style.cursor = pickerMode ? "crosshair" : calMode ? "grab" : "grab";
+}
+
+function fillCalSelect() {
+  const sel = document.getElementById("cal-select");
+  sel.innerHTML = DISTRICTS.map((d, i) => `<option value="${i}">${d.name}</option>`).join("");
+  updateCalInfo();
+}
+
+function updateCalInfo() {
+  const sel = document.getElementById("cal-select");
+  const d = DISTRICTS[+sel.value];
+  if (!d) return;
+  document.getElementById("cal-coords").textContent =
+    `${d.name}\nl:${d.l}  t:${d.t}  w:${d.w}  h:${d.h}`;
+}
+
+function nudge(dx, dy) {
+  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  if (!d) return;
+  d.l = Math.max(0, parseFloat(d.l) + dx).toFixed(2) + "%";
+  d.t = Math.max(0, parseFloat(d.t) + dy).toFixed(2) + "%";
+  renderMap();
+  updateCalInfo();
+  saveCalibration();
+}
+
+function resize(dw, dh) {
+  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  if (!d) return;
+  const w = parseFloat(d.w), h = parseFloat(d.h);
+  d.w = Math.max(0.5, w + dw).toFixed(2) + "%";
+  d.h = Math.max(0.5, h + dh).toFixed(2) + "%";
+  renderMap();
+  updateCalInfo();
+  saveCalibration();
+}
+
+// ─── FIXED TOOLTIP ──────────────────────────────────────────────
+const tooltipEl = document.getElementById("dist-tooltip");
+let tooltipDistIdx = -1;
+
+function showTooltip(idx, e) {
+  tooltipDistIdx = idx;
+  const d = DISTRICTS[idx];
+  const map = getPlacementMap(d.id);
+  const entries = Object.keys(map);
+  let html = `<h3>${d.name}</h3><p>${d.adv}</p>`;
+  if (entries.length) {
+    html += entries.map(id => {
+      const wb = warbands.find(w => w.id === id);
+      if (!wb) return '';
+      return `<div class="status">${wb.name} ${map[id] === 'foothold' ? '⚜ Foothold' : '● Explored'}</div>`;
+    }).join('');
+  }
+  tooltipEl.innerHTML = html;
+  tooltipEl.classList.add("show");
+  if (e) moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  if (!tooltipEl.classList.contains("show")) return;
+  let x = e.clientX + 16, y = e.clientY + 16;
+  // Keep within viewport
+  const r = tooltipEl.getBoundingClientRect();
+  if (x + r.width > window.innerWidth - 10) x = e.clientX - r.width - 16;
+  if (y + r.height > window.innerHeight - 10) y = e.clientY - r.height - 16;
+  tooltipEl.style.left = x + "px";
+  tooltipEl.style.top = y + "px";
+}
+
+function hideTooltip() {
+  tooltipEl.classList.remove("show");
+  tooltipDistIdx = -1;
+}
+
+// Hide tooltip on any click/touch outside districts
+document.addEventListener("click", e => {
+  if (!e.target.closest(".dist-zone-wrap")) hideTooltip();
+});
+document.addEventListener("touchstart", e => {
+  if (!e.target.closest(".dist-zone-wrap")) hideTooltip();
+}, { passive: true });
+
+// ─── MAP CLICK FOR PICKER MODE ──────────────────────────────────
+map.addEventListener("click", e => {
+  if (!pickerMode || e.target.closest(".token-marker")) return;
+  const r = map.getBoundingClientRect();
+  const mx = (e.clientX - r.left - panX) / scale;
+  const my = (e.clientY - r.top - panY) / scale;
+  const pctX = (mx / IMG_W * 100).toFixed(2);
+  const pctY = (my / IMG_H * 100).toFixed(2);
+
+  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  if (d) {
+    const w = parseFloat(d.w), h = parseFloat(d.h);
+    d.l = Math.max(0, Math.min(100 - w, pctX)).toFixed(2) + "%";
+    d.t = Math.max(0, Math.min(100 - h, pctY)).toFixed(2) + "%";
+    renderMap();
+    updateCalInfo();
+    saveCalibration();
+  }
+  pickerMode = false;
+  document.getElementById("pickBtn").textContent = "Pick";
+  document.getElementById("pickBtn").style.background = "";
+  map.style.cursor = "grab";
+});
+
+function showAllZones() {
+  zonesVisible = !zonesVisible;
+  const wraps = stage.querySelectorAll(".dist-zone-wrap");
+  wraps.forEach(w => {
+    if (zonesVisible || calMode) {
+      w.style.border = "2.5px solid rgba(255,220,60,.85)";
+      w.style.background = "rgba(255,220,60,.13)";
+      w.style.borderRadius = "50%";
+    } else {
+      w.style.border = "";
+      w.style.background = "";
+      w.style.borderRadius = "";
+    }
+  });
+  const btn = document.getElementById("showZonesBtn");
+  btn.textContent = zonesVisible || calMode ? "Hide zones" : "Show zones";
+}
+
+function updateCalUI() {
+  stage.classList.toggle("cal-highlight", calMode);
+}
+
+function exportDists() {
+  const json = JSON.stringify(DISTRICTS.map(d => ({
+    id: d.id, name: d.name,
+    l: d.l, t: d.t, w: d.w, h: d.h,
+    adv: d.adv
+  })), null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    const btn = document.getElementById("showZonesBtn").nextElementSibling;
+    const orig = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => btn.textContent = orig, 1500);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = json;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    alert("Exported to clipboard");
+  });
+}
+
+function importDists() {
+  const json = prompt("Paste district JSON data:");
+  if (!json) return;
+  try {
+    const data = JSON.parse(json);
+    if (!Array.isArray(data)) throw new Error("Not an array");
+    data.forEach((item, i) => {
+      if (DISTRICTS[i]) {
+        if (item.l) DISTRICTS[i].l = item.l;
+        if (item.t) DISTRICTS[i].t = item.t;
+        if (item.w) DISTRICTS[i].w = item.w;
+        if (item.h) DISTRICTS[i].h = item.h;
+      }
+    });
+    renderMap();
+    updateCalInfo();
+    alert("Imported successfully!");
+  } catch (e) {
+    alert("Invalid JSON: " + e.message);
+  }
+}
+
+// ─── INIT ───────────────────────────────────────────────────────
+initCampaigns();
+renderMap();
+renderWarbandList();
+renderDistrictList();
+updateCampaignUI();
+autoCenter();
+</script>
+</body>
+</html>
