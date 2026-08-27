@@ -391,294 +391,370 @@ const DISTRICTS = [
   {id:"west-gate",name:"West Gate",l:"21.30%",t:"26.52%",w:"5.80%",h:"8.20%",adv:"1/2 price Luthor Wolfenbaum. Hero auto-finds him."}
 ];
 
-// ─── STATE ──────────────────────────────────────────────────────
-let scale = 1, panX = 0, panY = 0, isPanning = false, startPX, startPY;
-const IMG_W = 4000, IMG_H = 2829;
-const map = document.getElementById("map");
-const content = document.getElementById("map-content");
-const stage = document.getElementById("map-stage");
+  // ─── STATE ──────────────────────────────────────────────────────
+  let scale = 1, panX = 0, panY = 0, isPanning = false, startPX, startPY;
+  const IMG_W = 4000, IMG_H = 2829;
+  const map = document.getElementById("map");
+  const content = document.getElementById("map-content");
+  const stage = document.getElementById("map-stage");
 
-// Campaign management
-let activeCampaignId = null;
-let warbands = [];
-let placements = {};
-let selectedToken = null;
-let loadedFilePath = null;
+  // Campaign management
+  let activeCampaignId = null;
+  let warbands = [];
+  let placements = {};
+  let selectedToken = null;
+  let loadedFilePath = null;
 
-// ─── FIREBASE REALTIME DATABASE INTEGRATION ────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyCw-TwopdsGRo-BPLYnMkixqcZZfSM65_Q",
-  authDomain: "mordheim-campaign-map.firebaseapp.com",
-  databaseURL: "https://mordheim-campaign-map-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "mordheim-campaign-map",
-  storageBucket: "mordheim-campaign-map.firebasestorage.app",
-  messagingSenderId: "895094913499",
-  appId: "1:895094913499:web:6a73e438f55b2a4f520ffe",
-  measurementId: "G-MSH4V97DY9"
-};
-
-let db = null;
-let fbConnected = false;
-let isRemoteUpdating = false;
-let activeCampaignRef = null;
-let campaignIndexRef = null;
-
-function initFirebase() {
-  try {
-    if (typeof firebase !== 'undefined') {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-      db = firebase.database();
-
-      // Monitor connection state
-      const connectedRef = db.ref(".info/connected");
-      connectedRef.on("value", (snap) => {
-        fbConnected = snap.val() === true;
-        updateSyncStatus(fbConnected, fbConnected ? "Live Sync" : "Offline Mode");
-      });
-
-      // Listen for remote campaign index list
-      campaignIndexRef = db.ref("campaign_index");
-      campaignIndexRef.on("value", (snap) => {
-        const remoteIndex = snap.val();
-        if (remoteIndex) syncCampaignIndexFromRemote(remoteIndex);
-      });
-
-      bindActiveCampaignListener();
-    } else {
-      updateSyncStatus(false, "Offline (No SDK)");
-    }
-  } catch (err) {
-    console.warn("Firebase initialization error:", err);
-    updateSyncStatus(false, "Offline Mode");
-  }
-}
-
-function updateSyncStatus(connected, text) {
-  const dot = document.getElementById("sync-dot");
-  const txt = document.getElementById("sync-text");
-  const fbTxt = document.getElementById("fb-status-text");
-  if (dot) dot.style.background = connected ? "#4ade80" : "#ef4444";
-  if (txt) txt.textContent = text;
-  if (fbTxt) {
-    fbTxt.textContent = text;
-    fbTxt.style.color = connected ? "#4ade80" : "#ef4444";
-  }
-}
-
-function syncCampaignIndexFromRemote(remoteIndex) {
-  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
-  if (!index) index = { version: 1, campaigns: [], activeId: activeCampaignId };
-
-  let changed = false;
-  Object.values(remoteIndex).forEach(rc => {
-    if (!rc || !rc.id) return;
-    const existing = index.campaigns.find(x => x.id === rc.id);
-    if (!existing) {
-      index.campaigns.push({ id: rc.id, name: rc.name || "Remote Campaign", createdAt: rc.updatedAt || Date.now(), updatedAt: rc.updatedAt || Date.now() });
-      changed = true;
-    } else if (existing.name !== rc.name) {
-      existing.name = rc.name;
-      existing.updatedAt = rc.updatedAt;
-      changed = true;
-    }
-  });
-
-  if (changed) {
-    localStorage.setItem("mw_campaigns", JSON.stringify(index));
-    updateCampaignUI();
-  }
-}
-
-function bindActiveCampaignListener() {
-  if (!db || !activeCampaignId) return;
-  if (activeCampaignRef) activeCampaignRef.off();
-
-  activeCampaignRef = db.ref("campaigns/" + activeCampaignId);
-  activeCampaignRef.on("value", (snap) => {
-    const data = snap.val();
-    if (!data) return;
-
-    isRemoteUpdating = true;
-    try {
-      if (Array.isArray(data.warbands)) {
-        warbands = data.warbands;
-        localStorage.setItem(cKey("warbands"), JSON.stringify(warbands));
-      }
-      if (data.placements && typeof data.placements === 'object') {
-        placements = migratePlacements(data.placements);
-        localStorage.setItem(cKey("placements"), JSON.stringify(placements));
-      }
-      if (Array.isArray(data.calibration)) {
-        applyCalibration(data.calibration);
-        localStorage.setItem(cKey("calibration"), JSON.stringify(data.calibration));
-      }
-      if (data.name) {
-        renameCampaignLocal(activeCampaignId, data.name);
-      }
-
-      renderMap();
-      renderWarbandList();
-      renderDistrictList();
-      updateCampaignUI();
-    } finally {
-      isRemoteUpdating = false;
-    }
-  });
-}
-
-function renameCampaignLocal(id, name) {
-  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
-  if (!index) return;
-  const c = index.campaigns.find(x => x.id === id);
-  if (c && c.name !== name) {
-    c.name = name;
-    c.updatedAt = Date.now();
-    localStorage.setItem("mw_campaigns", JSON.stringify(index));
-  }
-}
-
-function copyCampaignLink() {
-  const url = new URL(window.location.href);
-  url.searchParams.set("campaign", activeCampaignId);
-  navigator.clipboard.writeText(url.href).then(() => {
-    alert("Campaign link copied to clipboard!\nShare this link with other players to join this live campaign.");
-  }).catch(() => {
-    prompt("Copy this campaign URL:", url.href);
-  });
-}
-
-function cKey(k) { return activeCampaignId ? `mw_c_${activeCampaignId}_${k}` : null; }
-
-function applyCalibration(saved) {
-  if (!Array.isArray(saved)) return;
-  saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
-}
-
-function loadDefaultDistricts() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("mw_default_districts"));
-    if (saved && Array.isArray(saved)) applyCalibration(saved);
-  } catch {}
-}
-function saveDefaultDistricts() {
-  const data = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
-  localStorage.setItem("mw_default_districts", JSON.stringify(data));
-  // Also trigger file download
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = "district_default.json";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-}
-function restoreDefaultDistricts() {
-  const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
-  input.onchange = e => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!Array.isArray(data)) throw new Error("Invalid format");
-        localStorage.setItem("mw_default_districts", JSON.stringify(data));
-        applyCalibration(data);
-        // Also save to current campaign so it persists past next reload
-        if (activeCampaignId) localStorage.setItem(cKey("calibration"), JSON.stringify(data));
-        renderMap(); renderWarbandList(); renderDistrictList();
-        alert("Loaded district defaults.");
-      } catch (err) { alert("Invalid file: " + err.message); }
-    };
-    reader.readAsText(file);
+  // ─── FIREBASE REALTIME DATABASE INTEGRATION ────────────────────────
+  const firebaseConfig = {
+    apiKey: "AIzaSyCw-TwopdsGRo-BPLYnMkixqcZZfSM65_Q",
+    authDomain: "mordheim-campaign-map.firebaseapp.com",
+    databaseURL: "https://mordheim-campaign-map-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "mordheim-campaign-map",
+    storageBucket: "mordheim-campaign-map.firebasestorage.app",
+    messagingSenderId: "895094913499",
+    appId: "1:895094913499:web:6a73e438f55b2a4f520ffe",
+    measurementId: "G-MSH4V97DY9"
   };
-  input.click();
-}
 
-function initCampaigns() {
-  loadDefaultDistricts();
+  let db = null;
+  let fbConnected = false;
+  let isRemoteUpdating = false;
+  let activeCampaignRef = null;
+  let campaignIndexRef = null;
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const campaignFromUrl = urlParams.get('campaign');
+  function initFirebase() {
+    try {
+      if (typeof firebase !== 'undefined') {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
 
-  let index;
-  try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
-  if (!index || !Array.isArray(index.campaigns) || !index.campaigns.length) {
-    const ow = (() => { try { return JSON.parse(localStorage.getItem("mw_warbands")) || []; } catch { return []; } })();
-    const op = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem("mw_placements"))); } catch { return {}; } })();
-    let oc; try { oc = JSON.parse(localStorage.getItem("mw_calibration")); } catch {}
-    const id = campaignFromUrl || ("camp_" + Date.now());
-    const camp = { id, name: "Default", createdAt: Date.now(), updatedAt: Date.now() };
-    activeCampaignId = id;
-    localStorage.setItem(cKey("warbands"), JSON.stringify(ow));
-    localStorage.setItem(cKey("placements"), JSON.stringify(op));
-    if (oc) localStorage.setItem(cKey("calibration"), JSON.stringify(oc));
-    localStorage.setItem("mw_campaigns", JSON.stringify({ version: 1, campaigns: [camp], activeId: id }));
-    warbands = ow; placements = op;
-    if (oc) { applyCalibration(oc); } else {
-      const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
-      if (def && Array.isArray(def)) { applyCalibration(def); localStorage.setItem(cKey("calibration"), JSON.stringify(def)); }
-    }
-  } else {
-    if (campaignFromUrl) {
-      let c = index.campaigns.find(x => x.id === campaignFromUrl);
-      if (!c) {
-        c = { id: campaignFromUrl, name: "Shared Campaign", createdAt: Date.now(), updatedAt: Date.now() };
-        index.campaigns.push(c);
+        // Monitor connection state
+        const connectedRef = db.ref(".info/connected");
+        connectedRef.on("value", (snap) => {
+          fbConnected = snap.val() === true;
+          updateSyncStatus(fbConnected, fbConnected ? "Live Sync" : "Offline Mode");
+        });
+
+        // Listen for remote campaign index list
+        campaignIndexRef = db.ref("campaign_index");
+        campaignIndexRef.on("value", (snap) => {
+          const remoteIndex = snap.val();
+          if (remoteIndex) syncCampaignIndexFromRemote(remoteIndex);
+        }, (err) => {
+          console.error("Firebase campaign index read error:", err);
+          updateSyncStatus(false, "Permission Denied");
+        });
+
+        bindActiveCampaignListener();
+      } else {
+        updateSyncStatus(false, "Offline (No SDK)");
       }
-      activeCampaignId = campaignFromUrl;
-      index.activeId = campaignFromUrl;
+    } catch (err) {
+      console.warn("Firebase initialization error:", err);
+      updateSyncStatus(false, "Offline Mode");
+    }
+  }
+
+  function updateSyncStatus(connected, text) {
+    const dot = document.getElementById("sync-dot");
+    const txt = document.getElementById("sync-text");
+    const fbTxt = document.getElementById("fb-status-text");
+    if (dot) dot.style.background = connected ? "#4ade80" : "#ef4444";
+    if (txt) txt.textContent = text;
+    if (fbTxt) {
+      fbTxt.textContent = text;
+      fbTxt.style.color = connected ? "#4ade80" : "#ef4444";
+    }
+  }
+
+  function syncCampaignIndexFromRemote(remoteIndex) {
+    let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+    if (!index) index = { version: 1, campaigns: [], activeId: activeCampaignId };
+
+    let changed = false;
+    const remoteCampaigns = Object.values(remoteIndex).filter(rc => rc && rc.id);
+
+    remoteCampaigns.forEach(rc => {
+      const existing = index.campaigns.find(x => x.id === rc.id);
+      if (!existing) {
+        index.campaigns.push({ id: rc.id, name: rc.name || "Remote Campaign", createdAt: rc.updatedAt || Date.now(), updatedAt: rc.updatedAt || Date.now() });
+        changed = true;
+      } else if (existing.name !== rc.name) {
+        existing.name = rc.name;
+        existing.updatedAt = rc.updatedAt;
+        changed = true;
+      }
+    });
+
+    if (changed) {
       localStorage.setItem("mw_campaigns", JSON.stringify(index));
+      updateCampaignUI();
+    }
+
+    // Auto-switch to remote campaign if user is on empty local campaign
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('campaign') && warbands.length === 0 && remoteCampaigns.length > 0) {
+      const targetCamp = remoteCampaigns.find(c => c.id === activeCampaignId) || remoteCampaigns[0];
+      if (targetCamp && targetCamp.id !== activeCampaignId) {
+        switchCampaign(targetCamp.id);
+      }
+    }
+  }
+
+  function bindActiveCampaignListener() {
+    if (!db || !activeCampaignId) return;
+    if (activeCampaignRef) activeCampaignRef.off();
+
+    activeCampaignRef = db.ref("campaigns/" + activeCampaignId);
+    activeCampaignRef.on("value", (snap) => {
+      const data = snap.val();
+      if (!data) return;
+
+      isRemoteUpdating = true;
+      try {
+        if (Array.isArray(data.warbands)) {
+          warbands = data.warbands;
+          localStorage.setItem(cKey("warbands"), JSON.stringify(warbands));
+        }
+        if (data.placements && typeof data.placements === 'object') {
+          placements = migratePlacements(data.placements);
+          localStorage.setItem(cKey("placements"), JSON.stringify(placements));
+        }
+        if (Array.isArray(data.calibration)) {
+          applyCalibration(data.calibration);
+          localStorage.setItem(cKey("calibration"), JSON.stringify(data.calibration));
+        }
+        if (data.name) {
+          renameCampaignLocal(activeCampaignId, data.name);
+        }
+
+        renderMap();
+        renderWarbandList();
+        renderDistrictList();
+        updateCampaignUI();
+      } finally {
+        isRemoteUpdating = false;
+      }
+    }, (err) => {
+      console.error("Firebase read error:", err);
+      updateSyncStatus(false, "Permission Denied");
+    });
+  }
+
+  function renameCampaignLocal(id, name) {
+    let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+    if (!index) return;
+    const c = index.campaigns.find(x => x.id === id);
+    if (c && c.name !== name) {
+      c.name = name;
+      c.updatedAt = Date.now();
+      localStorage.setItem("mw_campaigns", JSON.stringify(index));
+    }
+  }
+
+  function copyCampaignLink() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("campaign", activeCampaignId);
+    navigator.clipboard.writeText(url.href).then(() => {
+      alert("Campaign link copied to clipboard!\nShare this link with other players to join this live campaign.");
+    }).catch(() => {
+      prompt("Copy this campaign URL:", url.href);
+    });
+  }
+
+  function cKey(k) { return activeCampaignId ? `mw_c_${activeCampaignId}_${k}` : null; }
+
+  function applyCalibration(saved) {
+    if (!Array.isArray(saved)) return;
+    saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
+  }
+
+  function loadDefaultDistricts() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("mw_default_districts"));
+      if (saved && Array.isArray(saved)) applyCalibration(saved);
+    } catch {}
+  }
+  function saveDefaultDistricts() {
+    const data = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+    localStorage.setItem("mw_default_districts", JSON.stringify(data));
+    // Also trigger file download
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "district_default.json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+  function restoreDefaultDistricts() {
+    const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
+    input.onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!Array.isArray(data)) throw new Error("Invalid format");
+          localStorage.setItem("mw_default_districts", JSON.stringify(data));
+          applyCalibration(data);
+          // Also save to current campaign so it persists past next reload
+          if (activeCampaignId) localStorage.setItem(cKey("calibration"), JSON.stringify(data));
+          renderMap(); renderWarbandList(); renderDistrictList();
+          alert("Loaded district defaults.");
+        } catch (err) { alert("Invalid file: " + err.message); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  function initCampaigns() {
+    loadDefaultDistricts();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignFromUrl = urlParams.get('campaign');
+
+    let index;
+    try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+    if (!index || !Array.isArray(index.campaigns) || !index.campaigns.length) {
+      const ow = (() => { try { return JSON.parse(localStorage.getItem("mw_warbands")) || []; } catch { return []; } })();
+      const op = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem("mw_placements"))); } catch { return {}; } })();
+      let oc; try { oc = JSON.parse(localStorage.getItem("mw_calibration")); } catch {}
+      const id = campaignFromUrl || "camp_default";
+      const camp = { id, name: "Default Campaign", createdAt: Date.now(), updatedAt: Date.now() };
+      activeCampaignId = id;
+      localStorage.setItem(cKey("warbands"), JSON.stringify(ow));
+      localStorage.setItem(cKey("placements"), JSON.stringify(op));
+      if (oc) localStorage.setItem(cKey("calibration"), JSON.stringify(oc));
+      localStorage.setItem("mw_campaigns", JSON.stringify({ version: 1, campaigns: [camp], activeId: id }));
+      warbands = ow; placements = op;
+      if (oc) { applyCalibration(oc); } else {
+        const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
+        if (def && Array.isArray(def)) { applyCalibration(def); localStorage.setItem(cKey("calibration"), JSON.stringify(def)); }
+      }
     } else {
-      activeCampaignId = index.activeId || index.campaigns[0].id;
+      if (campaignFromUrl) {
+        let c = index.campaigns.find(x => x.id === campaignFromUrl);
+        if (!c) {
+          c = { id: campaignFromUrl, name: "Shared Campaign", createdAt: Date.now(), updatedAt: Date.now() };
+          index.campaigns.push(c);
+        }
+        activeCampaignId = campaignFromUrl;
+        index.activeId = campaignFromUrl;
+        localStorage.setItem("mw_campaigns", JSON.stringify(index));
+      } else {
+        activeCampaignId = index.activeId || index.campaigns[0].id;
+        const c = index.campaigns.find(x => x.id === activeCampaignId);
+        if (!c) activeCampaignId = index.campaigns[0].id;
+      }
+      warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
+      placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
+      const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))) || null; } catch { return null; } })();
+      if (cal) {
+        applyCalibration(cal);
+      } else {
+        const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
+        if (def && Array.isArray(def)) localStorage.setItem(cKey("calibration"), JSON.stringify(def));
+        const oldCal = (() => { try { return JSON.parse(localStorage.getItem("mw_calibration")); } catch { return null; } })();
+        if (oldCal) { applyCalibration(oldCal); localStorage.setItem(cKey("calibration"), JSON.stringify(oldCal)); }
+      }
+    }
+
+    if (window.history && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("campaign", activeCampaignId);
+      window.history.replaceState({}, "", url.href);
+    }
+  }
+
+  function saveCampaigns() {
+    if (!activeCampaignId) return;
+    localStorage.setItem(cKey("warbands"), JSON.stringify(warbands));
+    localStorage.setItem(cKey("placements"), JSON.stringify(placements));
+    const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+    localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
+    let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+    if (index) {
       const c = index.campaigns.find(x => x.id === activeCampaignId);
-      if (!c) activeCampaignId = index.campaigns[0].id;
+      if (c) c.updatedAt = Date.now();
+      index.activeId = activeCampaignId;
+      localStorage.setItem("mw_campaigns", JSON.stringify(index));
+    }
+
+    if (db && !isRemoteUpdating) {
+      const activeCamp = getActiveCampaign();
+      const campData = {
+        id: activeCampaignId,
+        name: activeCamp ? activeCamp.name : "Default Campaign",
+        updatedAt: Date.now(),
+        warbands: warbands,
+        placements: placements,
+        calibration: cal
+      };
+      db.ref('campaigns/' + activeCampaignId).set(campData).catch(err => {
+        console.error("Firebase write error:", err);
+        updateSyncStatus(false, "Permission Denied");
+      });
+      db.ref('campaign_index/' + activeCampaignId).set({
+        id: activeCampaignId,
+        name: activeCamp ? activeCamp.name : "Default Campaign",
+        updatedAt: Date.now()
+      }).catch(err => {
+        console.error("Firebase index write error:", err);
+        updateSyncStatus(false, "Permission Denied");
+      });
+    }
+  }
+  // Backward-compat aliases for code that still calls saveWarbands/savePlacements/saveCalibration
+  function saveWarbands() { saveCampaigns(); }
+  function savePlacements() { saveCampaigns(); }
+  function saveCalibration() { saveCampaigns(); }
+
+  function listCampaigns() {
+    try { const i = JSON.parse(localStorage.getItem("mw_campaigns")); return i?.campaigns || []; } catch { return []; }
+  }
+  function getActiveCampaign() {
+    const all = listCampaigns();
+    return all.find(c => c.id === activeCampaignId) || all[0] || null;
+  }
+
+  function createCampaign(name) {
+    if (!name || !name.trim()) return;
+    const id = "camp_" + Date.now();
+    const camp = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+    saveCampaigns(); // save current
+    let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
+    if (!index) return;
+    index.campaigns.push(camp);
+    index.activeId = id;
+    localStorage.setItem("mw_campaigns", JSON.stringify(index));
+    activeCampaignId = id;
+    if (window.history && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("campaign", id);
+      window.history.replaceState({}, "", url.href);
+    }
+    warbands = []; placements = {};
+    const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
+    localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
+    saveCampaigns();
+    bindActiveCampaignListener();
+    renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
+  }
+
+  function switchCampaign(id) {
+    if (id === activeCampaignId || !id) return;
+    saveCampaigns();
+    activeCampaignId = id;
+    if (window.history && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("campaign", id);
+      window.history.replaceState({}, "", url.href);
     }
     warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
     placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
     const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
-    if (cal) {
-      applyCalibration(cal);
-    } else {
-      const def = (() => { try { return JSON.parse(localStorage.getItem("mw_default_districts")); } catch { return null; } })();
-      if (def && Array.isArray(def)) localStorage.setItem(cKey("calibration"), JSON.stringify(def));
-      const oldCal = (() => { try { return JSON.parse(localStorage.getItem("mw_calibration")); } catch { return null; } })();
-      if (oldCal) { applyCalibration(oldCal); localStorage.setItem(cKey("calibration"), JSON.stringify(oldCal)); }
-    }
-  }
-
-  if (window.history && window.history.replaceState) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("campaign", activeCampaignId);
-    window.history.replaceState({}, "", url.href);
-  }
-}
-function applyCalibration(saved) {
-  if (!Array.isArray(saved)) return;
-  saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
-}
-
-function saveCampaigns() {
-  if (!activeCampaignId) return;
-  localStorage.setItem(cKey("warbands"), JSON.stringify(warbands));
-  localStorage.setItem(cKey("placements"), JSON.stringify(placements));
-  const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
-  localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
-  let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
-  if (index) {
-    const c = index.campaigns.find(x => x.id === activeCampaignId);
-    if (c) c.updatedAt = Date.now();
-    index.activeId = activeCampaignId;
-    localStorage.setItem("mw_campaigns", JSON.stringify(index));
-  }
-
-  if (db && !isRemoteUpdating) {
-    const activeCamp = getActiveCampaign();
-    const campData = {
-      id: activeCampaignId,
-      name: activeCamp ? activeCamp.name : "Default",
-      updatedAt: Date.now(),
-      warbands: warbands,
-      placements: placements,
-      calibration: cal
     };
     db.ref('campaigns/' + activeCampaignId).set(campData);
     db.ref('campaign_index/' + activeCampaignId).set({
