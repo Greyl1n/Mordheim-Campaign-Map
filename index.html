@@ -493,15 +493,6 @@ const DISTRICTS = [
       localStorage.setItem("mw_campaigns", JSON.stringify(index));
       updateCampaignUI();
     }
-
-    // Auto-switch to remote campaign if user is on empty local campaign
-    const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.get('campaign') && warbands.length === 0 && remoteCampaigns.length > 0) {
-      const targetCamp = remoteCampaigns.find(c => c.id === activeCampaignId) || remoteCampaigns[0];
-      if (targetCamp && targetCamp.id !== activeCampaignId) {
-        switchCampaign(targetCamp.id);
-      }
-    }
   }
 
   function bindActiveCampaignListener() {
@@ -706,64 +697,8 @@ const DISTRICTS = [
       });
     }
   }
-  // Backward-compat aliases for code that still calls saveWarbands/savePlacements/saveCalibration
-  function saveWarbands() { saveCampaigns(); }
-  function savePlacements() { saveCampaigns(); }
-  function saveCalibration() { saveCampaigns(); }
 
-  function listCampaigns() {
-    try { const i = JSON.parse(localStorage.getItem("mw_campaigns")); return i?.campaigns || []; } catch { return []; }
-  }
-  function getActiveCampaign() {
-    const all = listCampaigns();
-    return all.find(c => c.id === activeCampaignId) || all[0] || null;
-  }
 
-  function createCampaign(name) {
-    if (!name || !name.trim()) return;
-    const id = "camp_" + Date.now();
-    const camp = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
-    saveCampaigns(); // save current
-    let index; try { index = JSON.parse(localStorage.getItem("mw_campaigns")); } catch {}
-    if (!index) return;
-    index.campaigns.push(camp);
-    index.activeId = id;
-    localStorage.setItem("mw_campaigns", JSON.stringify(index));
-    activeCampaignId = id;
-    if (window.history && window.history.replaceState) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("campaign", id);
-      window.history.replaceState({}, "", url.href);
-    }
-    warbands = []; placements = {};
-    const cal = DISTRICTS.map(d => ({ id: d.id, l: d.l, t: d.t, w: d.w, h: d.h }));
-    localStorage.setItem(cKey("calibration"), JSON.stringify(cal));
-    saveCampaigns();
-    bindActiveCampaignListener();
-    renderMap(); renderWarbandList(); renderDistrictList(); updateCampaignUI();
-  }
-
-  function switchCampaign(id) {
-    if (id === activeCampaignId || !id) return;
-    saveCampaigns();
-    activeCampaignId = id;
-    if (window.history && window.history.replaceState) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("campaign", id);
-      window.history.replaceState({}, "", url.href);
-    }
-    warbands = (() => { try { return JSON.parse(localStorage.getItem(cKey("warbands"))) || []; } catch { return []; } })();
-    placements = (() => { try { return migratePlacements(JSON.parse(localStorage.getItem(cKey("placements")))); } catch { return {}; } })();
-    const cal = (() => { try { return JSON.parse(localStorage.getItem(cKey("calibration"))); } catch { return null; } })();
-    };
-    db.ref('campaigns/' + activeCampaignId).set(campData);
-    db.ref('campaign_index/' + activeCampaignId).set({
-      id: activeCampaignId,
-      name: activeCamp ? activeCamp.name : "Default",
-      updatedAt: Date.now()
-    });
-  }
-}
 // Backward-compat aliases for code that still calls saveWarbands/savePlacements/saveCalibration
 function saveWarbands() { saveCampaigns(); }
 function savePlacements() { saveCampaigns(); }
