@@ -11,11 +11,13 @@ Interactive campaign tracker for Mordheim. Place warband tokens on a district ma
 
 ## Features
 
+- **Live Cloud Sync** — integrated Firebase Realtime Database updates warbands, district footholds, and tokens across all players in real time
+- **Shareable Campaign Links** — share direct campaign URLs (`?campaign=id`) so all players join and edit the same campaign live on GitHub Pages
 - **Interactive map** — zoom, pan, click districts to manage placements
 - **Token stacking** — multiple warbands in the same district stack at center; count badge shown when 2+
 - **Drag & drop** — drag tokens between districts to reassign
 - **Multi-campaign** — create, rename, switch, and delete campaigns via the Settings tab
-- **Data persistence** — all data stored in `localStorage`; export/import all campaigns as JSON
+- **Data persistence** — real-time cloud sync with automatic `localStorage` local caching & JSON import/export backup
 - **District calibration** — nudge/resize hit zones to align with your map image, save as defaults
 - **Rules reference** — built-in campaign rules in the sidebar
 
