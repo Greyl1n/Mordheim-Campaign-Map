@@ -23,16 +23,20 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
 #map:active{cursor:grabbing}
 #map-content{transform-origin:0 0;will-change:transform}
 #map-img{display:block;max-width:none;user-select:none;pointer-events:none}
+#districts-layer,#tokens-layer{position:absolute;inset:0;pointer-events:none}
 
 /* District zone (circular hit area) */
 .district-zone{position:absolute;cursor:pointer;z-index:5;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;transition:background .15s;pointer-events:auto}
 .district-zone:hover{background:rgba(212,168,71,0.12);z-index:10}
 
 /* Token markers on map */
-.token-marker{position:absolute;z-index:15;cursor:grab;transition:transform .15s,opacity .15s;pointer-events:auto}
-.token-marker:hover{transform:scale(1.15);z-index:20}
-.token-marker.dragging{opacity:.7;z-index:30}
-.token-marker img{width:100%;height:100%;display:block;border:1.5px solid var(--accent);border-radius:3px}
+.token-marker{position:absolute;z-index:15;cursor:grab;transition:transform .15s,opacity .15s;pointer-events:auto;user-select:none;-webkit-user-drag:none;filter:drop-shadow(0 2px 5px rgba(0,0,0,0.65));}
+.token-marker:hover{transform:scale(1.18);z-index:40 !important;}
+.token-marker.dragging{opacity:.35;pointer-events:none;}
+.token-marker img{width:100%;height:100%;display:block;border:1.5px solid var(--accent);border-radius:4px;user-select:none;-webkit-user-drag:none;pointer-events:none;}
+.token-marker.is-foothold img{border:2px solid #ffd700;box-shadow:0 0 10px rgba(255,215,0,0.6);}
+.token-count{position:absolute;z-index:35;background:var(--accent);color:#111;border-radius:50%;width:22px;height:22px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #111;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.8);user-select:none;transition:transform .15s;}
+.token-count:hover{transform:translate(-50%,-50%) scale(1.2) !important;}
 
 /* District tooltip — viewport-fixed overlay, unaffected by zoom */
 #dist-tooltip{position:fixed;z-index:500;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 12px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
@@ -42,7 +46,7 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
 #dist-tooltip .status{margin-top:4px;font-size:10px;color:var(--accent)}
 #dist-tooltip .icons{display:flex;gap:5px;margin-top:4px}
 
-.dist-zone-wrap{position:absolute;z-index:5}
+.dist-zone-wrap{position:absolute;z-index:5;pointer-events:auto;cursor:pointer;}
 
 /* Sidebar */
 #sidebar{position:fixed;top:0;left:0;width:360px;height:100vh;background:var(--panel);z-index:100;transform:translateX(-100%);transition:transform .25s;display:flex;flex-direction:column;border-right:1px solid var(--border)}
@@ -137,9 +141,9 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
 #cal-panel .cal-close:hover{color:var(--accent)}
 
 /* District context menu */
-#dist-menu{position:fixed;z-index:600;background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:none;min-width:180px}
+#dist-menu{position:fixed;z-index:600;background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);display:none;min-width:210px;max-width:320px;max-height:85vh;overflow-y:auto;}
 #dist-menu.show{display:block}
-#dist-menu .dm-title{font-size:11px;font-weight:600;color:var(--accent);padding:4px 8px 6px;border-bottom:1px solid var(--border);margin-bottom:4px}
+#dist-menu .dm-title{font-size:12px;font-weight:600;color:var(--accent);padding:4px 8px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
 #dist-menu .dm-opt{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--text2);transition:background .1s}
 #dist-menu .dm-opt:hover{background:var(--hover);color:var(--text)}
 #dist-menu .dm-opt.active{color:var(--accent)}
@@ -151,13 +155,14 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
 #dist-menu .dm-toggle button{flex:1;font-size:10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:3px 6px;cursor:pointer;color:var(--text2);transition:all .1s}
 #dist-menu .dm-toggle button.active{background:var(--accent);color:#000;border-color:var(--accent)}
 #dist-menu .dm-toggle button:hover{background:var(--accent);color:#000}
-#dist-menu .dm-row{display:flex;align-items:center;gap:6px;padding:4px 8px}
-#dist-menu .dm-row img{width:22px;height:22px;border:1px solid var(--accent);border-radius:2px}
-#dist-menu .dm-row .dm-label{flex:1;font-size:11px;color:var(--text2)}
+#dist-menu .dm-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:4px;cursor:pointer;transition:background .1s}
+#dist-menu .dm-row:hover{background:var(--hover)}
+#dist-menu .dm-row img{width:22px;height:22px;border:1.5px solid var(--accent);border-radius:3px;user-select:none;pointer-events:none}
+#dist-menu .dm-row .dm-label{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #dist-menu .dm-btns{display:flex;gap:2px}
 #dist-menu .dm-btns button{width:22px;height:22px;font-size:11px;line-height:1;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--text2);padding:0;transition:all .1s}
-#dist-menu .dm-btns button:hover{background:var(--hover);border-color:var(--accent)}
-#dist-menu .dm-btns button.active{background:var(--accent);color:#000;border-color:var(--accent)}
+#dist-menu .dm-btns button:hover{background:var(--hover);border-color:var(--accent);color:var(--accent)}
+#dist-menu .dm-btns button.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:bold}
 .rules-content h2{font-size:14px;font-weight:600;color:var(--accent);margin:16px 0 8px;letter-spacing:.5px}
 .rules-content h3{font-size:12px;font-weight:600;color:var(--text);margin:12px 0 6px}
 .rules-content p{font-size:11px;line-height:1.6;color:var(--text2);margin-bottom:8px}
@@ -185,7 +190,10 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
   <div id="map-content">
     <div id="map-stage" style="position:relative;width:4000px;height:2829px">
       <img id="map-img" src="src/modheim-map-EN.jpg" alt="Mordheim Map" width="4000" height="2829"
+           decoding="async" fetchpriority="high"
            onerror="this.style.background='#2a2a2a';this.style.border='1px dashed #555';this.alt='Image not found'">
+      <div id="districts-layer"></div>
+      <div id="tokens-layer"></div>
     </div>
   </div>
 </div>
@@ -397,6 +405,9 @@ const DISTRICTS = [
   const map = document.getElementById("map");
   const content = document.getElementById("map-content");
   const stage = document.getElementById("map-stage");
+  const districtsLayer = document.getElementById("districts-layer");
+  const tokensLayer = document.getElementById("tokens-layer");
+  let districtWraps = [];
 
   // Campaign management
   let activeCampaignId = null;
@@ -561,6 +572,7 @@ const DISTRICTS = [
   function applyCalibration(saved) {
     if (!Array.isArray(saved)) return;
     saved.forEach((s, i) => { if (DISTRICTS[i]) { if (s.l) DISTRICTS[i].l = s.l; if (s.t) DISTRICTS[i].t = s.t; if (s.w) DISTRICTS[i].w = s.w; if (s.h) DISTRICTS[i].h = s.h; } });
+    if (districtWraps && districtWraps.length) renderDistricts();
   }
 
   function loadDefaultDistricts() {
@@ -963,59 +975,104 @@ const RULES_HTML = `<div class="rules-content">
 
 // ─── TOKEN IMAGE HELPERS ────────────────────────────────────────
 function tokenSvg(symId) {
-  return `<img src="${TOKEN_PATH}${symId}_explored.jpg" alt="${symId}" style="width:100%;height:100%;display:block">`;
+  return `<img src="${TOKEN_PATH}${symId}_explored.jpg" alt="${symId}" draggable="false" style="width:100%;height:100%;display:block;user-select:none;-webkit-user-drag:none;pointer-events:none">`;
 }
 
 function footholdSvg(symId) {
-  return `<img src="${TOKEN_PATH}${symId}_foothold.jpg" alt="${symId}" style="width:100%;height:100%;display:block">`;
+  return `<img src="${TOKEN_PATH}${symId}_foothold.jpg" alt="${symId}" draggable="false" style="width:100%;height:100%;display:block;user-select:none;-webkit-user-drag:none;pointer-events:none">`;
 }
 
 // ─── MAP RENDER ─────────────────────────────────────────────────
-function renderMap() {
-  // Clear old districts and tokens
-  stage.querySelectorAll(".dist-zone-wrap, .token-marker, .token-count").forEach(el => el.remove());
+function renderDistricts() {
+  if (!districtsLayer) return;
+  districtsLayer.innerHTML = "";
+  districtWraps = [];
+  const frag = document.createDocumentFragment();
 
-  // Draw district hit zones
   DISTRICTS.forEach((d, i) => {
     const wrap = document.createElement("div");
     wrap.className = "dist-zone-wrap";
-    wrap.style.cssText = `left:${d.l};top:${d.t};width:${d.w};height:${d.h}`;
+    wrap.dataset.district = d.id;
+    wrap.dataset.idx = i;
+    wrap.style.cssText = `left:${d.l};top:${d.t};width:${d.w};height:${d.h};pointer-events:auto;cursor:pointer;`;
 
-    // Circular zone — size is min of w/h to keep circle inside bounds
     const zoneSize = `min(${d.w},${d.h})`;
     const zone = document.createElement("div");
     zone.className = "district-zone";
+    zone.dataset.idx = i;
+    zone.dataset.district = d.id;
     zone.style.cssText = `width:${zoneSize};height:${zoneSize};`;
-    zone.addEventListener("click", e => onDistrictClick(i, e));
+    zone.addEventListener("click", e => {
+      e.stopPropagation();
+      onDistrictClick(i, e);
+    });
     wrap.appendChild(zone);
 
-    // Tooltip via fixed overlay
-    wrap.addEventListener("mouseenter", e => showTooltip(i, e));
-    wrap.addEventListener("mousemove", e => moveTooltip(e));
-    wrap.addEventListener("mouseleave", hideTooltip);
+    wrap.addEventListener("click", e => onDistrictClick(i, e));
 
-    // Touch tooltip
+    wrap.addEventListener("mouseenter", e => showTooltip(i, e));
+    wrap.addEventListener("mousemove", moveTooltip);
+    wrap.addEventListener("mouseleave", hideTooltip);
     wrap.addEventListener("touchstart", () => showTooltip(i, null), { passive: true });
 
-    stage.appendChild(wrap);
+    frag.appendChild(wrap);
+    districtWraps.push(wrap);
   });
 
-  // Draw token markers
+  districtsLayer.appendChild(frag);
+  updateCalVisuals();
+}
+
+function updateCalVisuals() {
+  const isHigh = calMode || zonesVisible;
+  stage.classList.toggle("cal-highlight", isHigh);
+  districtWraps.forEach(w => {
+    if (isHigh) {
+      w.style.border = "2.5px solid rgba(255,220,60,.85)";
+      w.style.background = "rgba(255,220,60,.13)";
+      w.style.borderRadius = "50%";
+    } else {
+      w.style.border = "";
+      w.style.background = "";
+      w.style.borderRadius = "";
+    }
+  });
+}
+
+function renderTokens() {
+  if (!tokensLayer) return;
+  tokensLayer.innerHTML = "";
+  const frag = document.createDocumentFragment();
+
   Object.entries(placements).forEach(([distId, map]) => {
     const dist = DISTRICTS.find(d => d.id === distId);
     if (!dist) return;
     const l = parseFloat(dist.l), t = parseFloat(dist.t);
     const w = parseFloat(dist.w), h = parseFloat(dist.h);
-    const cx = l + w/2;
-    const cy = t + h/2;
+    const cx = l + w / 2;
+    const cy = t + h / 2;
 
-    // Sort: foothold rendered on top (among foothold, later entries render higher)
-    const entries = Object.entries(map).sort((a, b) => a[1] === 'foothold' ? 1 : b[1] === 'foothold' ? -1 : 0);
+    // Filter to active warbands with valid token
+    const rawEntries = Object.entries(map).filter(([wbId]) => {
+      const wb = warbands.find(w => w.id === wbId);
+      return wb && wb.tokenId;
+    });
 
-    // Stack tokens at center, foothold on top, with a slight cascade for the rest
+    // Sort: 'explored' tokens FIRST (underneath), 'foothold' tokens LAST (rendered on top)
+    const entries = rawEntries.sort((a, b) => {
+      const aFh = a[1] === 'foothold';
+      const bFh = b[1] === 'foothold';
+      if (aFh && !bFh) return 1;
+      if (!aFh && bFh) return -1;
+      return 0;
+    });
+
     const total = entries.length;
-    const stackSize = Math.min(parseFloat(dist.w), parseFloat(dist.h)) * 0.5;
-    const cascadePx = total > 1 ? 3 : 0;
+    if (!total) return;
+
+    const baseSize = Math.min(w, h) * 0.52;
+    const footholds = entries.filter(e => e[1] === 'foothold');
+    const exploreds = entries.filter(e => e[1] !== 'foothold');
 
     entries.forEach(([wbId, status], idx) => {
       const wb = warbands.find(w => w.id === wbId);
@@ -1023,163 +1080,274 @@ function renderMap() {
       const isFoothold = status === 'foothold';
 
       const marker = document.createElement("div");
-      marker.className = "token-marker";
-      const markerSize = isFoothold ? stackSize : stackSize * 0.85;
-      const left = cx - markerSize/2;
-      const top = cy - markerSize/2;
-      const cascade = isFoothold ? 0 : (idx - (total - 1) / 2) * cascadePx;
-      marker.style.cssText = `left:${left}%;top:${top}%;width:${markerSize}%;height:${markerSize}%;z-index:${isFoothold ? 17 : 12};${cascade ? `transform:translate(${cascade}px,${cascade}px)` : ''}`;
+      marker.className = "token-marker" + (isFoothold ? " is-foothold" : "");
       marker.dataset.district = distId;
-      marker.title = wb.name + (isFoothold ? ' (foothold)' : '');
+      marker.dataset.wbId = wbId;
+      marker.title = `${wb.name} (${status}) — Click for warbands, drag to move`;
 
-      const svg = isFoothold ? footholdSvg(wb.tokenId) : tokenSvg(wb.tokenId);
-      marker.innerHTML = svg;
+      let offX = 0, offY = 0;
+      let markerSize = baseSize;
+      let zIndex = isFoothold ? 25 : 12 + idx;
 
-      // Drag to reposition
-      marker.addEventListener("mousedown", e => {
-        e.stopPropagation();
-        startDrag(e, distId, wbId);
-      });
-      marker.addEventListener("touchstart", e => {
-        e.stopPropagation();
-        e.preventDefault();
-        startDrag(e, distId, wbId);
-      }, { passive: false });
+      if (total === 1) {
+        offX = 0;
+        offY = 0;
+        markerSize = baseSize;
+      } else if (footholds.length === 1 && !isFoothold) {
+        // Exactly 1 foothold (king of district): explored tokens fan out from behind
+        markerSize = baseSize * 0.88;
+        if (exploreds.length === 1) {
+          offX = -baseSize * 0.40;
+          offY = -baseSize * 0.30;
+        } else {
+          const expIdx = exploreds.findIndex(e => e[0] === wbId);
+          const angle = Math.PI * 0.65 + (expIdx / Math.max(1, exploreds.length - 1)) * Math.PI * 0.90;
+          offX = Math.cos(angle) * (baseSize * 0.42);
+          offY = Math.sin(angle) * (baseSize * 0.35);
+        }
+      } else if (footholds.length === 1 && isFoothold) {
+        // The foothold token sits proudly centered on top
+        offX = 0;
+        offY = 0;
+        markerSize = baseSize;
+        zIndex = 25;
+      } else if (footholds.length > 1) {
+        // Multiple footholds: stagger them so both are visible
+        if (isFoothold) {
+          const fhIdx = footholds.findIndex(e => e[0] === wbId);
+          offX = (fhIdx === 0 ? -1 : 1) * (baseSize * 0.20);
+          offY = (fhIdx === 0 ? -1 : 1) * (baseSize * 0.15);
+          markerSize = baseSize;
+          zIndex = 24 + fhIdx;
+        } else {
+          markerSize = baseSize * 0.85;
+          const expIdx = exploreds.findIndex(e => e[0] === wbId);
+          offX = -baseSize * 0.45;
+          offY = (expIdx === 0 ? -1 : 1) * (baseSize * 0.35);
+          zIndex = 12 + idx;
+        }
+      } else {
+        // No footholds (all explored tokens)
+        if (total === 2) {
+          offX = (idx === 0 ? -1 : 1) * (baseSize * 0.26);
+          offY = (idx === 0 ? -1 : 1) * (baseSize * 0.20);
+          markerSize = baseSize * 0.92;
+        } else {
+          if (idx === total - 1) {
+            offX = 0;
+            offY = 0;
+            markerSize = baseSize;
+            zIndex = 20;
+          } else {
+            const angle = (idx / (total - 1)) * 2 * Math.PI - Math.PI * 0.75;
+            offX = Math.cos(angle) * (baseSize * 0.38);
+            offY = Math.sin(angle) * (baseSize * 0.32);
+            markerSize = baseSize * 0.88;
+            zIndex = 12 + idx;
+          }
+        }
+      }
 
-      stage.appendChild(marker);
+      const left = cx + offX - markerSize / 2;
+      const top = cy + offY - markerSize / 2;
+
+      marker.style.cssText = `left:${left}%;top:${top}%;width:${markerSize}%;height:${markerSize}%;z-index:${zIndex};cursor:grab;pointer-events:auto;`;
+      marker.innerHTML = isFoothold ? footholdSvg(wb.tokenId) : tokenSvg(wb.tokenId);
+
+      marker.addEventListener("mousedown", e => handleTokenPointerDown(e, distId, wbId));
+      marker.addEventListener("touchstart", e => handleTokenPointerDown(e, distId, wbId), { passive: false });
+
+      frag.appendChild(marker);
     });
-    // Count badge when multiple tokens
+
+    // Badge showing number of warbands in stack placed in top-right corner of stack
     if (total > 1) {
       const badge = document.createElement("div");
       badge.className = "token-count";
+      badge.dataset.district = distId;
       badge.textContent = total;
-      badge.style.cssText = `position:absolute;z-index:18;left:${cx}%;top:${cy}%;transform:translate(-50%,-50%);background:var(--accent);color:#000;border-radius:50%;width:22px;height:22px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none;border:2px solid var(--panel)`;
-      stage.appendChild(badge);
+      badge.title = `${total} warbands in ${dist.name} — Click to view`;
+      const badgeLeft = cx + baseSize * 0.40;
+      const badgeTop = cy - baseSize * 0.40;
+      badge.style.left = badgeLeft + "%";
+      badge.style.top = badgeTop + "%";
+      badge.style.transform = "translate(-50%,-50%)";
+
+      const openDist = e => {
+        e.stopPropagation();
+        const distIdx = DISTRICTS.findIndex(d => d.id === distId);
+        if (distIdx >= 0) onDistrictClick(distIdx, e);
+      };
+
+      badge.addEventListener("click", openDist);
+      badge.addEventListener("mousedown", e => e.stopPropagation());
+      badge.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+
+      frag.appendChild(badge);
     }
   });
 
-  // Re-apply calibration visuals if active
-  if (calMode || zonesVisible) {
-    stage.classList.add("cal-highlight");
-    if (calMode || zonesVisible) {
-      const wraps = stage.querySelectorAll(".dist-zone-wrap");
-      wraps.forEach(w => {
-        if (calMode || zonesVisible) {
-          w.style.border = "2.5px solid rgba(255,220,60,.85)";
-          w.style.background = "rgba(255,220,60,.13)";
-          w.style.borderRadius = "50%";
-        }
-      });
-    }
-  } else {
-    stage.classList.remove("cal-highlight");
-  }
+  tokensLayer.appendChild(frag);
 }
 
-// ─── DRAG TOKENS ────────────────────────────────────────────────
-let dragData = null;
-function startDrag(e, distId, wbId) {
-  const t = e.touches ? e.touches[0] : e;
+function renderMap() {
+  if (!districtWraps.length) renderDistricts();
+  renderTokens();
+}
+
+// ─── DRAG & CLICK HANDLING FOR TOKENS ───────────────────────────
+let activePointerDrag = null;
+
+function getDistrictAtPoint(clientX, clientY) {
+  // 1. Check element directly under point (handles tokens, badges, zones, wrappers)
+  const el = document.elementFromPoint(clientX, clientY);
+  if (el) {
+    const distEl = el.closest("[data-district]");
+    if (distEl && distEl.dataset.district) {
+      const found = DISTRICTS.find(d => d.id === distEl.dataset.district);
+      if (found) return found;
+    }
+    const zone = el.closest(".district-zone");
+    if (zone && zone.dataset.idx !== undefined) {
+      return DISTRICTS[+zone.dataset.idx];
+    }
+    const wrap = el.closest(".dist-zone-wrap");
+    if (wrap) {
+      const idx = districtWraps.indexOf(wrap);
+      if (idx >= 0) return DISTRICTS[idx];
+    }
+  }
+
+  // 2. Coordinate fallback in map stage (with generous hit radius)
   const r = map.getBoundingClientRect();
-  dragData = { distId, wbId, offsetX: t.clientX, offsetY: t.clientY };
+  const stageX = (clientX - r.left - panX) / scale;
+  const stageY = (clientY - r.top - panY) / scale;
+  const pctX = (stageX / IMG_W) * 100;
+  const pctY = (stageY / IMG_H) * 100;
 
-  // Create floating ghost
-  const ghost = document.createElement("div");
-  ghost.id = "drag-ghost";
-  ghost.style.cssText = "position:fixed;pointer-events:none;z-index:999;width:48px;height:48px;opacity:.7";
-  const wb = warbands.find(w => w.id === wbId);
-  if (wb && wb.tokenId) {
-    const svg = getWarbandStatus(distId, wbId) === 'foothold' ? footholdSvg(wb.tokenId) : tokenSvg(wb.tokenId);
-    ghost.innerHTML = svg;
+  let bestDist = null;
+  let minDistSq = Infinity;
+  for (const d of DISTRICTS) {
+    const dl = parseFloat(d.l), dt = parseFloat(d.t);
+    const dw = parseFloat(d.w), dh = parseFloat(d.h);
+    const cx = dl + dw / 2;
+    const cy = dt + dh / 2;
+    const dx = (pctX - cx) * (IMG_W / IMG_H);
+    const dy = pctY - cy;
+    const distSq = dx * dx + dy * dy;
+    const radius = Math.max(dw, dh) * 1.5;
+    if (distSq <= radius * radius && distSq < minDistSq) {
+      minDistSq = distSq;
+      bestDist = d;
+    }
   }
-  ghost.style.left = (t.clientX - 24) + "px";
-  ghost.style.top = (t.clientY - 24) + "px";
-  document.body.appendChild(ghost);
+  return bestDist;
 }
 
-document.addEventListener("mousemove", e => {
-  if (!dragData) return;
-  const ghost = document.getElementById("drag-ghost");
-  if (ghost) {
-    ghost.style.left = (e.clientX - 24) + "px";
-    ghost.style.top = (e.clientY - 24) + "px";
-  }
-});
-document.addEventListener("mouseup", e => {
-  if (!dragData) return;
-  const ghost = document.getElementById("drag-ghost");
-  if (ghost) ghost.remove();
+function handleTokenPointerDown(e, distId, wbId) {
+  e.stopPropagation();
+  if (e.cancelable) e.preventDefault();
+  const t = e.touches ? e.touches[0] : e;
+  const distIdx = DISTRICTS.findIndex(d => d.id === distId);
+  const srcMarker = e.currentTarget;
 
-  // Check if dropped on a district
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const zoneWrap = el?.closest(".dist-zone-wrap");
-  if (zoneWrap) {
-    const idx = Array.from(stage.querySelectorAll(".dist-zone-wrap")).indexOf(zoneWrap);
-    if (idx >= 0) {
-      const targetDist = DISTRICTS[idx];
-      const { distId: srcDistId, wbId } = dragData;
-      if (wbId && targetDist.id !== srcDistId) {
-        // Remove from source district
-        const srcMap = placements[srcDistId];
-        if (srcMap) {
-          delete srcMap[wbId];
-          if (!Object.keys(srcMap).length) delete placements[srcDistId];
-        }
-        // Add to target district
-        const targetMap = placements[targetDist.id] = placements[targetDist.id] || {};
-        targetMap[wbId] = 'explored';
-        savePlacements();
-        renderMap();
-        renderWarbandList();
-        renderDistrictList();
+  activePointerDrag = {
+    startX: t.clientX,
+    startY: t.clientY,
+    distId,
+    wbId,
+    distIdx,
+    srcMarker,
+    isDragging: false,
+    ghost: null
+  };
+
+  const onMove = ev => {
+    if (!activePointerDrag) return;
+    const pt = ev.touches ? ev.touches[0] : ev;
+    const dist = Math.hypot(pt.clientX - activePointerDrag.startX, pt.clientY - activePointerDrag.startY);
+
+    if (!activePointerDrag.isDragging && dist > 5) {
+      activePointerDrag.isDragging = true;
+      if (activePointerDrag.srcMarker) activePointerDrag.srcMarker.classList.add("dragging");
+      const ghost = document.createElement("div");
+      ghost.id = "drag-ghost";
+      ghost.style.cssText = "position:fixed;pointer-events:none;z-index:999;width:52px;height:52px;opacity:.88;transform:translate(-50%,-50%);will-change:left,top;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.8));";
+      const wb = warbands.find(w => w.id === activePointerDrag.wbId);
+      if (wb && wb.tokenId) {
+        ghost.innerHTML = tokenSvg(wb.tokenId);
+      }
+      ghost.style.left = pt.clientX + "px";
+      ghost.style.top = pt.clientY + "px";
+      document.body.appendChild(ghost);
+      activePointerDrag.ghost = ghost;
+    }
+
+    if (activePointerDrag.isDragging) {
+      if (ev.cancelable) ev.preventDefault();
+      if (activePointerDrag.ghost) {
+        activePointerDrag.ghost.style.left = pt.clientX + "px";
+        activePointerDrag.ghost.style.top = pt.clientY + "px";
       }
     }
-  }
-  dragData = null;
-});
+  };
 
-// Touch drag
-document.addEventListener("touchmove", e => {
-  if (!dragData) return;
-  e.preventDefault();
-  const t = e.touches[0];
-  const ghost = document.getElementById("drag-ghost");
-  if (ghost) {
-    ghost.style.left = (t.clientX - 24) + "px";
-    ghost.style.top = (t.clientY - 24) + "px";
-  }
-}, { passive: false });
-document.addEventListener("touchend", e => {
-  if (!dragData) return;
-  const ghost = document.getElementById("drag-ghost");
-  if (ghost) ghost.remove();
-  const t = e.changedTouches[0];
-  const el = document.elementFromPoint(t.clientX, t.clientY);
-  const zoneWrap = el?.closest(".dist-zone-wrap");
-  if (zoneWrap) {
-    const idx = Array.from(stage.querySelectorAll(".dist-zone-wrap")).indexOf(zoneWrap);
-    if (idx >= 0) {
-      const targetDist = DISTRICTS[idx];
-      const { distId: srcDistId, wbId } = dragData;
-      if (wbId && targetDist.id !== srcDistId) {
-        // Remove from source district
+  const onEnd = ev => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onEnd);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onEnd);
+    document.removeEventListener("touchcancel", onEnd);
+
+    if (!activePointerDrag) return;
+    const { isDragging, ghost, srcMarker: dragMarker, distId: srcDistId, wbId: movedWbId, distIdx: clickDistIdx } = activePointerDrag;
+
+    if (ghost) ghost.remove();
+    if (dragMarker) dragMarker.classList.remove("dragging");
+
+    if (!isDragging) {
+      // CLICK: Show list of warbands and status in this district
+      if (clickDistIdx >= 0) {
+        const pt = ev.changedTouches ? ev.changedTouches[0] : ev;
+        onDistrictClick(clickDistIdx, pt);
+      }
+    } else {
+      // DRAG: Transfer token to target district and default to 'explored'
+      const pt = ev.changedTouches ? ev.changedTouches[0] : ev;
+      const clientX = pt ? (pt.clientX ?? pt.pageX) : (ev.clientX || 0);
+      const clientY = pt ? (pt.clientY ?? pt.pageY) : (ev.clientY || 0);
+      const targetDist = getDistrictAtPoint(clientX, clientY);
+
+      if (targetDist && targetDist.id !== srcDistId) {
         const srcMap = placements[srcDistId];
         if (srcMap) {
-          delete srcMap[wbId];
+          delete srcMap[movedWbId];
           if (!Object.keys(srcMap).length) delete placements[srcDistId];
         }
-        // Add to target district
         const targetMap = placements[targetDist.id] = placements[targetDist.id] || {};
-        targetMap[wbId] = 'explored';
+        if (!targetMap[movedWbId]) {
+          targetMap[movedWbId] = 'explored'; // Joining stack defaults to explored
+        }
         savePlacements();
-        renderMap();
-        renderWarbandList();
-        renderDistrictList();
+        renderTokens();
+        if (sidebar && sidebar.classList.contains("open")) {
+          renderWarbandList();
+          renderDistrictList();
+        }
+      } else {
+        renderTokens();
       }
     }
-  }
-  dragData = null;
-});
+
+    activePointerDrag = null;
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onEnd);
+  document.addEventListener("touchmove", onMove, { passive: false });
+  document.addEventListener("touchend", onEnd);
+  document.addEventListener("touchcancel", onEnd);
+}
 
 // ─── DISTRICT CLICK ─────────────────────────────────────────────
 let menuDistIdx = -1;
@@ -1188,44 +1356,66 @@ menuEl.id = "dist-menu";
 document.body.appendChild(menuEl);
 
 function onDistrictClick(idx, e) {
+  if (menuDistIdx === idx && menuEl.classList.contains("show") && Date.now() - menuOpenTs < 150) return;
   closeMenu();
   menuDistIdx = idx;
   const d = DISTRICTS[idx];
+  if (!d) return;
   const activeWbs = warbands.filter(w => w.active);
   const map = getPlacementMap(d.id);
   const hasAny = Object.keys(map).length > 0;
-  let html = `<div class="dm-title">${d.name} <span style="font-weight:400;font-size:10px;color:var(--text2)">(${Object.keys(map).length})</span></div>`;
 
-  // None option
-  html += `<div class="dm-opt ${!hasAny ? 'active' : ''}" data-idx="${idx}" data-wb-id="">
-    <span style="width:24px;text-align:center;color:var(--text2)">—</span>
-    <span class="dm-label">None</span>
+  let html = `<div class="dm-title">
+    <span>${d.name}</span>
+    <span style="font-weight:400;font-size:10px;color:var(--text2)">(${Object.keys(map).length})</span>
   </div>`;
 
-  // Warbands
-  activeWbs.forEach(w => {
-    const status = map[w.id];
-    html += `<div class="dm-row">
-      <img src="${TOKEN_PATH}${w.tokenId}_explored.jpg" alt="">
-      <span class="dm-label">${w.name}</span>
-      <div class="dm-btns">
-        <button class="dm-btn${!status ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="">—</button>
-        <button class="dm-btn${status === 'explored' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="explored">●</button>
-        <button class="dm-btn${status === 'foothold' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="foothold">⚜</button>
-      </div>
+  if (d.adv) {
+    html += `<div style="font-size:10px;color:var(--accent2);padding:0 8px 6px;line-height:1.3;border-bottom:1px solid var(--border);margin-bottom:6px;font-style:italic">${d.adv}</div>`;
+  }
+
+  // Clear option (None)
+  html += `<div class="dm-opt ${!hasAny ? 'active' : ''}" data-idx="${idx}" data-wb-id="" title="Clear all tokens from this district">
+    <span style="width:22px;text-align:center;color:var(--text2);font-weight:bold">—</span>
+    <span class="dm-label" style="font-weight:500">None (Clear district)</span>
+  </div>`;
+
+  if (!activeWbs.length) {
+    html += `<div style="padding:10px 8px;font-size:11px;color:var(--text2);line-height:1.4">
+      No active warbands yet.<br>Create or activate one in the sidebar (+ Warbands).
     </div>`;
-  });
+  } else {
+    html += `<div style="font-size:10px;color:var(--text2);padding:6px 8px 2px;text-transform:uppercase;letter-spacing:0.5px">Warbands</div>`;
+    activeWbs.forEach(w => {
+      const status = map[w.id];
+      html += `<div class="dm-row" data-idx="${idx}" data-wb-id="${w.id}" data-status="${status || ''}" title="Click row to cycle status, or click buttons on right">
+        <img src="${TOKEN_PATH}${w.tokenId}_explored.jpg" alt="" draggable="false">
+        <span class="dm-label">${w.name}</span>
+        <div class="dm-btns">
+          <button class="dm-btn${!status ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="" title="None / Remove from district">—</button>
+          <button class="dm-btn${status === 'explored' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="explored" title="Set Explored">●</button>
+          <button class="dm-btn${status === 'foothold' ? ' active' : ''}" data-action="set" data-idx="${idx}" data-wb-id="${w.id}" data-status="foothold" title="Set Foothold">⚜</button>
+        </div>
+      </div>`;
+    });
+  }
 
   menuEl.innerHTML = html;
   menuEl.classList.add("show");
-  if (e) {
-    let x = e.clientX + 8, y = e.clientY + 8;
-    const r = menuEl.getBoundingClientRect();
-    if (x + r.width > window.innerWidth - 10) x = window.innerWidth - r.width - 10;
-    if (y + r.height > window.innerHeight - 10) y = window.innerHeight - r.height - 10;
-    menuEl.style.left = x + "px";
-    menuEl.style.top = y + "px";
-  }
+
+  const pt = e ? (e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e)) : null;
+  let cx = (pt && typeof pt.clientX === 'number') ? pt.clientX : window.innerWidth / 2;
+  let cy = (pt && typeof pt.clientY === 'number') ? pt.clientY : window.innerHeight / 2;
+
+  let x = cx + 8, y = cy + 8;
+  const r = menuEl.getBoundingClientRect();
+  const mw = r.width || 220;
+  const mh = r.height || 180;
+  if (x + mw > window.innerWidth - 10) x = window.innerWidth - mw - 10;
+  if (y + mh > window.innerHeight - 10) y = window.innerHeight - mh - 10;
+  menuEl.style.left = Math.max(10, x) + "px";
+  menuEl.style.top = Math.max(10, y) + "px";
+
   menuOpenTs = Date.now();
 }
 
@@ -1248,9 +1438,11 @@ function setPlacement(idx, warbandId, status) {
     map[warbandId] = 'explored';
   }
   savePlacements();
-  renderMap();
-  renderWarbandList();
-  renderDistrictList();
+  renderTokens();
+  if (sidebar && sidebar.classList.contains("open")) {
+    renderWarbandList();
+    renderDistrictList();
+  }
   closeMenu();
 }
 
@@ -1262,25 +1454,14 @@ function closeMenu() {
 // Position menu on click and close on outside click
 let menuOpenTs = 0;
 document.addEventListener("click", e => {
-  const menu = document.getElementById("dist-menu");
-  if (e.target.closest(".district-zone") || e.target.closest(".dist-zone-wrap")) {
-    setTimeout(() => {
-      if (menu.classList.contains("show")) {
-        let x = e.clientX + 8, y = e.clientY + 8;
-        const r = menu.getBoundingClientRect();
-        if (x + r.width > window.innerWidth - 10) x = window.innerWidth - r.width - 10;
-        if (y + r.height > window.innerHeight - 10) y = window.innerHeight - r.height - 10;
-        menu.style.left = x + "px";
-        menu.style.top = y + "px";
-      }
-    }, 10);
-  } else if (!e.target.closest("#dist-menu") && e.target.closest(".dist-item") === null) {
-    if (Date.now() - menuOpenTs < 100) return;
-    closeMenu();
+  if (e.target.closest("#dist-menu") || e.target.closest(".district-zone") || e.target.closest(".dist-zone-wrap") || e.target.closest(".token-marker") || e.target.closest(".token-count") || e.target.closest(".dist-item")) {
+    return;
   }
+  if (Date.now() - menuOpenTs < 100) return;
+  closeMenu();
 });
 document.addEventListener("touchstart", e => {
-  if (!e.target.closest("#dist-menu") && !e.target.closest(".district-zone") && !e.target.closest(".dist-zone-wrap")) {
+  if (!e.target.closest("#dist-menu") && !e.target.closest(".district-zone") && !e.target.closest(".dist-zone-wrap") && !e.target.closest(".token-marker") && !e.target.closest(".token-count") && !e.target.closest(".dist-item")) {
     closeMenu();
   }
 }, { passive: true });
@@ -1289,14 +1470,30 @@ document.addEventListener("touchstart", e => {
 menuEl.addEventListener("click", e => {
   const btn = e.target.closest(".dm-btn");
   if (btn) {
+    e.stopPropagation();
     const idx = parseInt(btn.dataset.idx);
     setPlacement(idx, btn.dataset.wbId, btn.dataset.status);
     return;
   }
   const opt = e.target.closest(".dm-opt");
   if (opt) {
+    e.stopPropagation();
     const idx = parseInt(opt.dataset.idx);
     setPlacement(idx, opt.dataset.wbId || null, null);
+    return;
+  }
+  const row = e.target.closest(".dm-row");
+  if (row) {
+    e.stopPropagation();
+    const idx = parseInt(row.dataset.idx);
+    const wbId = row.dataset.wbId;
+    const currentStatus = row.dataset.status;
+    let nextStatus = 'explored';
+    if (!currentStatus) nextStatus = 'explored';
+    else if (currentStatus === 'explored') nextStatus = 'foothold';
+    else nextStatus = '';
+    setPlacement(idx, wbId, nextStatus);
+    return;
   }
 });
 // Event delegation for district list items
@@ -1332,25 +1529,56 @@ document.getElementById("camp-list").addEventListener("click", e => {
 });
 
 // ─── ZOOM / PAN ─────────────────────────────────────────────────
+let transformPending = false;
 function applyTransform() {
-  content.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+  if (transformPending) return;
+  transformPending = true;
+  requestAnimationFrame(() => {
+    content.style.transform = `translate3d(${panX}px,${panY}px,0) scale(${scale})`;
+    transformPending = false;
+  });
 }
 
-map.addEventListener("mousedown", e => {
-  if (e.target.closest(".district-zone") || e.target.closest(".token-marker") || e.target.tagName === "BUTTON") return;
-  if (e.target.closest(".dist-zone-wrap")) return;
-  if (dragData) return;
-  isPanning = true;
-  startPX = e.clientX - panX;
-  startPY = e.clientY - panY;
-});
-document.addEventListener("mousemove", e => {
+let panStartX = 0, panStartY = 0, panStartTime = 0;
+
+function onPanMove(e) {
   if (!isPanning) return;
   panX = e.clientX - startPX;
   panY = e.clientY - startPY;
   applyTransform();
+}
+
+function onPanEnd(e) {
+  const wasPanning = isPanning;
+  isPanning = false;
+  window.removeEventListener("mousemove", onPanMove);
+  window.removeEventListener("mouseup", onPanEnd);
+
+  // If user clicked without panning (< 6px movement and < 350ms):
+  if (wasPanning && e && Math.hypot(e.clientX - panStartX, e.clientY - panStartY) < 6 && (Date.now() - panStartTime < 400)) {
+    if (!e.target.closest("#dist-menu") && !e.target.closest("#sidebar") && !e.target.closest(".top-bar") && !e.target.closest("button")) {
+      const d = getDistrictAtPoint(e.clientX, e.clientY);
+      if (d) {
+        const idx = DISTRICTS.findIndex(item => item.id === d.id);
+        if (idx >= 0) onDistrictClick(idx, e);
+      }
+    }
+  }
+}
+
+map.addEventListener("mousedown", e => {
+  if (e.target.closest(".district-zone") || e.target.closest(".token-marker") || e.target.closest(".token-count") || e.target.tagName === "BUTTON") return;
+  if (e.target.closest(".dist-zone-wrap")) return;
+  if (activePointerDrag) return;
+  isPanning = true;
+  panStartX = e.clientX;
+  panStartY = e.clientY;
+  panStartTime = Date.now();
+  startPX = e.clientX - panX;
+  startPY = e.clientY - panY;
+  window.addEventListener("mousemove", onPanMove, { passive: true });
+  window.addEventListener("mouseup", onPanEnd);
 });
-document.addEventListener("mouseup", () => { isPanning = false; });
 
 map.addEventListener("wheel", e => {
   e.preventDefault();
@@ -1402,27 +1630,34 @@ window.addEventListener("resize", autoCenter);
 
 // Touch support
 let lastTouchDist = 0;
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0, touchMoved = false;
 map.addEventListener("touchstart", e => {
-  if (e.target.closest(".token-marker") || e.target.closest(".district-zone")) return;
+  if (e.target.closest(".token-marker") || e.target.closest(".token-count") || e.target.closest(".district-zone") || e.target.closest(".dist-zone-wrap")) return;
   const t = Array.from(e.touches);
   if (t.length === 1) {
     isPanning = true;
+    touchStartX = t[0].clientX;
+    touchStartY = t[0].clientY;
+    touchStartTime = Date.now();
+    touchMoved = false;
     startPX = t[0].clientX - panX;
     startPY = t[0].clientY - panY;
   } else if (t.length === 2) {
     isPanning = false;
+    touchMoved = true;
     lastTouchDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
   }
 }, { passive: true });
 map.addEventListener("touchmove", e => {
   if (!isPanning) return;
-  e.preventDefault();
   const t = Array.from(e.touches);
   if (t.length === 1) {
+    if (Math.hypot(t[0].clientX - touchStartX, t[0].clientY - touchStartY) > 5) touchMoved = true;
     panX = t[0].clientX - startPX;
     panY = t[0].clientY - startPY;
     applyTransform();
   } else if (t.length === 2) {
+    touchMoved = true;
     const dist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
     const r = map.getBoundingClientRect();
     const mx = (t[0].clientX+t[1].clientX)/2 - r.left;
@@ -1436,7 +1671,20 @@ map.addEventListener("touchmove", e => {
     applyTransform();
   }
 }, { passive: false });
-map.addEventListener("touchend", () => { isPanning = false; });
+map.addEventListener("touchend", e => {
+  const wasPanning = isPanning;
+  isPanning = false;
+  if (wasPanning && !touchMoved && (Date.now() - touchStartTime < 400)) {
+    const pt = e.changedTouches ? e.changedTouches[0] : null;
+    const cx = pt ? pt.clientX : touchStartX;
+    const cy = pt ? pt.clientY : touchStartY;
+    const d = getDistrictAtPoint(cx, cy);
+    if (d) {
+      const idx = DISTRICTS.findIndex(item => item.id === d.id);
+      if (idx >= 0) onDistrictClick(idx, { clientX: cx, clientY: cy });
+    }
+  }
+});
 
 // ─── SIDEBAR ────────────────────────────────────────────────────
 function toggleSidebar() {
@@ -1671,22 +1919,40 @@ function updateCalInfo() {
 }
 
 function nudge(dx, dy) {
-  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  const sel = document.getElementById("cal-select");
+  const idx = +sel.value;
+  const d = DISTRICTS[idx];
   if (!d) return;
   d.l = Math.max(0, parseFloat(d.l) + dx).toFixed(2) + "%";
   d.t = Math.max(0, parseFloat(d.t) + dy).toFixed(2) + "%";
-  renderMap();
+  if (districtWraps[idx]) {
+    districtWraps[idx].style.left = d.l;
+    districtWraps[idx].style.top = d.t;
+  }
+  renderTokens();
   updateCalInfo();
   saveCalibration();
 }
 
 function resize(dw, dh) {
-  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  const sel = document.getElementById("cal-select");
+  const idx = +sel.value;
+  const d = DISTRICTS[idx];
   if (!d) return;
   const w = parseFloat(d.w), h = parseFloat(d.h);
   d.w = Math.max(0.5, w + dw).toFixed(2) + "%";
   d.h = Math.max(0.5, h + dh).toFixed(2) + "%";
-  renderMap();
+  if (districtWraps[idx]) {
+    districtWraps[idx].style.width = d.w;
+    districtWraps[idx].style.height = d.h;
+    const zone = districtWraps[idx].querySelector(".district-zone");
+    if (zone) {
+      const zoneSize = `min(${d.w},${d.h})`;
+      zone.style.width = zoneSize;
+      zone.style.height = zoneSize;
+    }
+  }
+  renderTokens();
   updateCalInfo();
   saveCalibration();
 }
@@ -1694,6 +1960,7 @@ function resize(dw, dh) {
 // ─── FIXED TOOLTIP ──────────────────────────────────────────────
 const tooltipEl = document.getElementById("dist-tooltip");
 let tooltipDistIdx = -1;
+let tooltipWidth = 280, tooltipHeight = 120;
 
 function showTooltip(idx, e) {
   tooltipDistIdx = idx;
@@ -1710,16 +1977,16 @@ function showTooltip(idx, e) {
   }
   tooltipEl.innerHTML = html;
   tooltipEl.classList.add("show");
+  tooltipWidth = tooltipEl.offsetWidth || 280;
+  tooltipHeight = tooltipEl.offsetHeight || 120;
   if (e) moveTooltip(e);
 }
 
 function moveTooltip(e) {
   if (!tooltipEl.classList.contains("show")) return;
   let x = e.clientX + 16, y = e.clientY + 16;
-  // Keep within viewport
-  const r = tooltipEl.getBoundingClientRect();
-  if (x + r.width > window.innerWidth - 10) x = e.clientX - r.width - 16;
-  if (y + r.height > window.innerHeight - 10) y = e.clientY - r.height - 16;
+  if (x + tooltipWidth > window.innerWidth - 10) x = e.clientX - tooltipWidth - 16;
+  if (y + tooltipHeight > window.innerHeight - 10) y = e.clientY - tooltipHeight - 16;
   tooltipEl.style.left = x + "px";
   tooltipEl.style.top = y + "px";
 }
@@ -1746,12 +2013,17 @@ map.addEventListener("click", e => {
   const pctX = (mx / IMG_W * 100).toFixed(2);
   const pctY = (my / IMG_H * 100).toFixed(2);
 
-  const d = DISTRICTS[+document.getElementById("cal-select").value];
+  const idx = +document.getElementById("cal-select").value;
+  const d = DISTRICTS[idx];
   if (d) {
     const w = parseFloat(d.w), h = parseFloat(d.h);
     d.l = Math.max(0, Math.min(100 - w, pctX)).toFixed(2) + "%";
     d.t = Math.max(0, Math.min(100 - h, pctY)).toFixed(2) + "%";
-    renderMap();
+    if (districtWraps[idx]) {
+      districtWraps[idx].style.left = d.l;
+      districtWraps[idx].style.top = d.t;
+    }
+    renderTokens();
     updateCalInfo();
     saveCalibration();
   }
@@ -1763,24 +2035,13 @@ map.addEventListener("click", e => {
 
 function showAllZones() {
   zonesVisible = !zonesVisible;
-  const wraps = stage.querySelectorAll(".dist-zone-wrap");
-  wraps.forEach(w => {
-    if (zonesVisible || calMode) {
-      w.style.border = "2.5px solid rgba(255,220,60,.85)";
-      w.style.background = "rgba(255,220,60,.13)";
-      w.style.borderRadius = "50%";
-    } else {
-      w.style.border = "";
-      w.style.background = "";
-      w.style.borderRadius = "";
-    }
-  });
+  updateCalVisuals();
   const btn = document.getElementById("showZonesBtn");
-  btn.textContent = zonesVisible || calMode ? "Hide zones" : "Show zones";
+  if (btn) btn.textContent = zonesVisible || calMode ? "Hide zones" : "Show zones";
 }
 
 function updateCalUI() {
-  stage.classList.toggle("cal-highlight", calMode);
+  updateCalVisuals();
 }
 
 function exportDists() {
