@@ -46,7 +46,7 @@ a{color:var(--accent)}a:hover{color:var(--accent2)}
 #dist-tooltip .status{margin-top:4px;font-size:10px;color:var(--accent)}
 #dist-tooltip .icons{display:flex;gap:5px;margin-top:4px}
 
-.dist-zone-wrap{position:absolute;z-index:5;pointer-events:auto;cursor:pointer;}
+.dist-zone-wrap{position:absolute;z-index:5;border-radius:50%;pointer-events:auto;cursor:pointer;}
 
 /* Sidebar */
 #sidebar{position:fixed;top:0;left:0;width:360px;height:100vh;background:var(--panel);z-index:100;transform:translateX(-100%);transition:transform .25s;display:flex;flex-direction:column;border-right:1px solid var(--border)}
@@ -994,7 +994,7 @@ function renderDistricts() {
     wrap.className = "dist-zone-wrap";
     wrap.dataset.district = d.id;
     wrap.dataset.idx = i;
-    wrap.style.cssText = `left:${d.l};top:${d.t};width:${d.w};height:${d.h};pointer-events:auto;cursor:pointer;`;
+    wrap.style.cssText = `left:${d.l};top:${d.t};width:${d.w};height:${d.h};border-radius:50%;pointer-events:auto;cursor:pointer;`;
 
     const zoneSize = `min(${d.w},${d.h})`;
     const zone = document.createElement("div");
@@ -1008,7 +1008,18 @@ function renderDistricts() {
     });
     wrap.appendChild(zone);
 
-    wrap.addEventListener("click", e => onDistrictClick(i, e));
+    wrap.addEventListener("click", e => {
+      const rect = wrap.getBoundingClientRect();
+      const rx = rect.width / 2;
+      const ry = rect.height / 2;
+      const cx = rect.left + rx;
+      const cy = rect.top + ry;
+      const nx = (e.clientX - cx) / rx;
+      const ny = (e.clientY - cy) / ry;
+      if (nx * nx + ny * ny <= 1.05) {
+        onDistrictClick(i, e);
+      }
+    });
 
     wrap.addEventListener("mouseenter", e => showTooltip(i, e));
     wrap.addEventListener("mousemove", moveTooltip);
@@ -1027,14 +1038,13 @@ function updateCalVisuals() {
   const isHigh = calMode || zonesVisible;
   stage.classList.toggle("cal-highlight", isHigh);
   districtWraps.forEach(w => {
+    w.style.borderRadius = "50%";
     if (isHigh) {
       w.style.border = "2.5px solid rgba(255,220,60,.85)";
       w.style.background = "rgba(255,220,60,.13)";
-      w.style.borderRadius = "50%";
     } else {
       w.style.border = "";
       w.style.background = "";
-      w.style.borderRadius = "";
     }
   });
 }
@@ -1198,46 +1208,38 @@ function renderMap() {
 // ─── DRAG & CLICK HANDLING FOR TOKENS ───────────────────────────
 let activePointerDrag = null;
 
-function getDistrictAtPoint(clientX, clientY) {
-  // 1. Check element directly under point (handles tokens, badges, zones, wrappers)
-  const el = document.elementFromPoint(clientX, clientY);
-  if (el) {
-    const distEl = el.closest("[data-district]");
-    if (distEl && distEl.dataset.district) {
-      const found = DISTRICTS.find(d => d.id === distEl.dataset.district);
-      if (found) return found;
-    }
-    const zone = el.closest(".district-zone");
-    if (zone && zone.dataset.idx !== undefined) {
-      return DISTRICTS[+zone.dataset.idx];
-    }
-    const wrap = el.closest(".dist-zone-wrap");
-    if (wrap) {
-      const idx = districtWraps.indexOf(wrap);
-      if (idx >= 0) return DISTRICTS[idx];
-    }
-  }
-
-  // 2. Coordinate fallback in map stage (with generous hit radius)
+function getDistrictAtPoint(clientX, clientY, margin = 1.05) {
   const r = map.getBoundingClientRect();
   const stageX = (clientX - r.left - panX) / scale;
   const stageY = (clientY - r.top - panY) / scale;
   const pctX = (stageX / IMG_W) * 100;
   const pctY = (stageY / IMG_H) * 100;
 
+  // 1. Check element directly under point (handles tokens, badges)
+  const el = document.elementFromPoint(clientX, clientY);
+  if (el) {
+    if (el.closest(".token-marker") || el.closest(".token-count")) {
+      const distEl = el.closest("[data-district]");
+      if (distEl && distEl.dataset.district) {
+        const found = DISTRICTS.find(d => d.id === distEl.dataset.district);
+        if (found) return found;
+      }
+    }
+  }
+
+  // 2. Strict calibrated ellipse hit-test
   let bestDist = null;
   let minDistSq = Infinity;
   for (const d of DISTRICTS) {
     const dl = parseFloat(d.l), dt = parseFloat(d.t);
     const dw = parseFloat(d.w), dh = parseFloat(d.h);
-    const cx = dl + dw / 2;
-    const cy = dt + dh / 2;
-    const dx = (pctX - cx) * (IMG_W / IMG_H);
-    const dy = pctY - cy;
-    const distSq = dx * dx + dy * dy;
-    const radius = Math.max(dw, dh) * 1.5;
-    if (distSq <= radius * radius && distSq < minDistSq) {
-      minDistSq = distSq;
+    const rx = dw / 2;
+    const ry = dh / 2;
+    const cx = dl + rx;
+    const cy = dt + ry;
+    const normDistSq = Math.pow((pctX - cx) / rx, 2) + Math.pow((pctY - cy) / ry, 2);
+    if (normDistSq <= margin && normDistSq < minDistSq) {
+      minDistSq = normDistSq;
       bestDist = d;
     }
   }
@@ -1312,17 +1314,17 @@ function handleTokenPointerDown(e, distId, wbId) {
         onDistrictClick(clickDistIdx, pt);
       }
     } else {
-      // DRAG: Transfer token to target district and default to 'explored'
+      // DRAG: Copy token to target district as 'explored', source district remains 'explored'
       const pt = ev.changedTouches ? ev.changedTouches[0] : ev;
       const clientX = pt ? (pt.clientX ?? pt.pageX) : (ev.clientX || 0);
       const clientY = pt ? (pt.clientY ?? pt.pageY) : (ev.clientY || 0);
-      const targetDist = getDistrictAtPoint(clientX, clientY);
+      const targetDist = getDistrictAtPoint(clientX, clientY, 1.25);
 
       if (targetDist && targetDist.id !== srcDistId) {
         const srcMap = placements[srcDistId];
         if (srcMap) {
-          delete srcMap[movedWbId];
-          if (!Object.keys(srcMap).length) delete placements[srcDistId];
+          // Token is copied, not moved. The source district remains in explored state!
+          srcMap[movedWbId] = 'explored';
         }
         const targetMap = placements[targetDist.id] = placements[targetDist.id] || {};
         if (!targetMap[movedWbId]) {
@@ -1554,13 +1556,15 @@ function onPanEnd(e) {
   window.removeEventListener("mousemove", onPanMove);
   window.removeEventListener("mouseup", onPanEnd);
 
-  // If user clicked without panning (< 6px movement and < 350ms):
+  // If user clicked without panning (< 6px movement and < 400ms):
   if (wasPanning && e && Math.hypot(e.clientX - panStartX, e.clientY - panStartY) < 6 && (Date.now() - panStartTime < 400)) {
     if (!e.target.closest("#dist-menu") && !e.target.closest("#sidebar") && !e.target.closest(".top-bar") && !e.target.closest("button")) {
-      const d = getDistrictAtPoint(e.clientX, e.clientY);
+      const d = getDistrictAtPoint(e.clientX, e.clientY, 1.05);
       if (d) {
         const idx = DISTRICTS.findIndex(item => item.id === d.id);
         if (idx >= 0) onDistrictClick(idx, e);
+      } else {
+        closeMenu();
       }
     }
   }
@@ -1584,7 +1588,10 @@ map.addEventListener("wheel", e => {
   e.preventDefault();
   const r = map.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
-  const ns = Math.max(0.5, Math.min(4, scale + (e.deltaY > 0 ? -0.08 : 0.08)));
+  const fitScale = Math.min(map.clientWidth / IMG_W, map.clientHeight / IMG_H) * 0.96;
+  const minScale = Math.min(0.08, fitScale * 0.7);
+  const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08;
+  const ns = Math.max(minScale, Math.min(4, scale * zoomFactor));
   const ratio = ns / scale;
   panX = mx - ratio * (mx - panX);
   panY = my - ratio * (my - panY);
@@ -1595,7 +1602,7 @@ map.addEventListener("wheel", e => {
 function zoomIn() {
   const r = map.getBoundingClientRect();
   const mx = r.width/2, my = r.height/2;
-  const ns = Math.min(4, scale + 0.3);
+  const ns = Math.min(4, scale * 1.25);
   const ratio = ns/scale;
   panX = mx - ratio*(mx-panX); panY = my - ratio*(my-panY);
   scale = ns; applyTransform();
@@ -1603,30 +1610,29 @@ function zoomIn() {
 function zoomOut() {
   const r = map.getBoundingClientRect();
   const mx = r.width/2, my = r.height/2;
-  const ns = Math.max(0.5, scale - 0.3);
+  const fitScale = Math.min(map.clientWidth / IMG_W, map.clientHeight / IMG_H) * 0.96;
+  const minScale = Math.min(0.08, fitScale * 0.7);
+  const ns = Math.max(minScale, scale / 1.25);
   const ratio = ns/scale;
   panX = mx - ratio*(mx-panX); panY = my - ratio*(my-panY);
   scale = ns; applyTransform();
 }
 function resetView() { centerView(); }
 function centerView() {
-  const cw = map.clientWidth, ch = map.clientHeight;
-  scale = Math.min(cw / IMG_W, ch / IMG_H) * 0.9;
+  const cw = map.clientWidth || window.innerWidth;
+  const ch = map.clientHeight || window.innerHeight;
+  if (!cw || !ch) return;
+  scale = Math.min(cw / IMG_W, ch / IMG_H) * 0.96;
   panX = (cw - IMG_W * scale) / 2;
   panY = (ch - IMG_H * scale) / 2;
   applyTransform();
 }
 function autoCenter() {
-  if (panX === 0 && panY === 0) {
-    const cw = map.clientWidth, ch = map.clientHeight;
-    const fitScale = Math.min(cw / IMG_W, ch / IMG_H) * 0.9;
-    scale = Math.max(0.5, Math.min(4, fitScale));
-    panX = (cw - IMG_W * scale) / 2;
-    panY = (ch - IMG_H * scale) / 2;
-    applyTransform();
-  }
+  centerView();
 }
-window.addEventListener("resize", autoCenter);
+window.addEventListener("resize", () => {
+  centerView();
+});
 
 // Touch support
 let lastTouchDist = 0;
@@ -1661,8 +1667,9 @@ map.addEventListener("touchmove", e => {
     const dist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
     const r = map.getBoundingClientRect();
     const mx = (t[0].clientX+t[1].clientX)/2 - r.left;
-    const my = (t[0].clientY+t[1].clientY)/2 - r.top;
-    const ns = Math.max(0.5, Math.min(4, scale + (dist-lastTouchDist)/100));
+    const fitScale = Math.min(map.clientWidth / IMG_W, map.clientHeight / IMG_H) * 0.96;
+    const minScale = Math.min(0.08, fitScale * 0.7);
+    const ns = Math.max(minScale, Math.min(4, scale + (dist-lastTouchDist)/100));
     const ratio = ns/scale;
     panX = mx - ratio*(mx-panX);
     panY = my - ratio*(my-panY);
@@ -1678,10 +1685,12 @@ map.addEventListener("touchend", e => {
     const pt = e.changedTouches ? e.changedTouches[0] : null;
     const cx = pt ? pt.clientX : touchStartX;
     const cy = pt ? pt.clientY : touchStartY;
-    const d = getDistrictAtPoint(cx, cy);
+    const d = getDistrictAtPoint(cx, cy, 1.05);
     if (d) {
       const idx = DISTRICTS.findIndex(item => item.id === d.id);
       if (idx >= 0) onDistrictClick(idx, { clientX: cx, clientY: cy });
+    } else {
+      closeMenu();
     }
   }
 });
@@ -2095,8 +2104,10 @@ initFirebase();
 renderMap();
 renderWarbandList();
 renderDistrictList();
-updateCampaignUI();
-autoCenter();
+centerView();
+requestAnimationFrame(centerView);
+window.addEventListener("load", centerView);
+setTimeout(centerView, 120);
 </script>
 </body>
 </html>
